@@ -1,0 +1,404 @@
+# PRD - Gerador de Leads CNPJ com CRM e Gamificação
+
+## 1. Visão Geral do Produto
+
+### 1.1 Objetivo
+Desenvolver uma plataforma completa de geração e gestão de leads baseada em dados de CNPJ, com sistema de prospecção automatizada via WhatsApp e e-mail, gestão de pipeline de vendas e gamificação para equipes comerciais.
+
+### 1.2 Público-Alvo
+- **Primário**: Empresas de vendas B2B e equipes comerciais
+- **Secundário**: Gestores de vendas e diretores comerciais
+- **Terciário**: Freelancers e consultores que fazem prospecção
+
+### 1.3 Proposta de Valor
+- Automatização completa do processo de prospecção
+- Gestão inteligente de leads com pipeline visual
+- Gamificação para motivar equipes de vendas
+- Dashboards executivos para acompanhamento gerencial
+
+## 2. Funcionalidades Principais
+
+### 2.1 Módulo de Geração de Leads (CNPJ)
+
+#### 2.1.1 Funcionalidades Core
+- **Busca Avançada por CNPJ**: 
+  - Filtros por setor, porte, localização, faturamento
+  - Integração com APIs públicas (Receita Federal, Serasa, etc.)
+  - Validação automática de dados empresariais
+  - Enriquecimento de dados com informações complementares
+
+- **Base de Dados Inteligente**:
+  - Banco de dados com milhões de CNPJs ativos
+  - Atualização automática de informações
+  - Histórico de interações com empresas
+  - Segmentação automática por perfil ideal
+
+#### 2.1.2 Critérios de Filtragem
+- Porte da empresa (MEI, ME, EPP, Grande)
+- Setor/CNAE específico
+- Faturamento estimado
+- Localização geográfica
+- Data de abertura da empresa
+- Situação cadastral
+
+### 2.2 Módulo de Prospecção Automatizada
+
+#### 2.2.1 Disparo de WhatsApp
+- **Integração com WhatsApp Business API**
+- **Templates de Mensagem**:
+  - Personalização automática com dados da empresa
+  - A/B testing de mensagens
+  - Agendamento de envios
+  - Controle de frequência anti-spam
+
+- **Gestão de Campanhas**:
+  - Criação de sequências de follow-up
+  - Segmentação de audiência
+  - Métricas de entrega e abertura
+  - Blacklist automática para opt-outs
+
+#### 2.2.2 Disparo de E-mail
+- **Editor de E-mail Drag & Drop**
+- **Personalização Dinâmica**:
+  - Merge tags com dados do CNPJ
+  - Assinatura automática
+  - Anexos personalizados
+  - Rastreamento de abertura e cliques
+
+- **Automação de Sequências**:
+  - Drip campaigns
+  - Triggers baseados em comportamento
+  - Reenvio automático para não-abertos
+  - Integração com calendários para agendamentos
+
+### 2.3 Sistema Kanban de Gestão de Leads
+
+#### 2.3.1 Estágios do Pipeline
+1. **Novos Leads**: Leads gerados automaticamente
+2. **Contatados**: Primeiro contato realizado
+3. **Interesse Demonstrado**: Lead respondeu positivamente
+4. **Proposta Enviada**: Orçamento ou proposta em análise
+5. **Negociação**: Em processo de fechamento
+6. **Fechado - Ganho**: Venda concretizada
+7. **Fechado - Perdido**: Oportunidade perdida
+
+#### 2.3.2 Funcionalidades do Kanban
+- **Arrastar e Soltar**: Movimentação intuitiva entre estágios
+- **Informações do Card**:
+  - Dados completos da empresa
+  - Histórico de interações
+  - Valor estimado da oportunidade
+  - Responsável pelo lead
+  - Data de última interação
+
+- **Ações Rápidas**:
+  - Agendar follow-up
+  - Adicionar notas
+  - Anexar arquivos
+  - Definir prioridade
+
+### 2.4 Sistema de Comprovação de Vendas
+
+#### 2.4.1 Upload de Comprovantes
+- **Interface de Upload**:
+  - Drag & drop de arquivos
+  - Suporte a múltiplos formatos (PDF, JPG, PNG)
+  - Pré-visualização de imagens
+  - Validação de arquivo
+
+- **Informações Obrigatórias**:
+  - Valor da venda
+  - Data de fechamento
+  - CNPJ do cliente
+  - Tipo de produto/serviço vendido
+  - Observações adicionais
+
+#### 2.4.2 Validação e Aprovação
+- **Fluxo de Aprovação**:
+  - Revisão automática de dados
+  - Validação manual pelo gestor
+  - Histórico de aprovações
+  - Notificações de status
+
+### 2.5 Sistema de Pontuação e Gamificação
+
+#### 2.5.1 Estrutura de Pontos
+- **Ações Pontuáveis**:
+  - Geração de lead: 1 ponto
+  - Primeiro contato: 2 pontos
+  - Demonstração de interesse: 5 pontos
+  - Proposta enviada: 10 pontos
+  - Venda fechada: 50 pontos + % do valor
+  - Bônus por meta mensal: 100 pontos
+
+#### 2.5.2 Rankings e Prêmios
+- **Ranking Dinâmico**:
+  - Atualização em tempo real
+  - Histórico mensal e anual
+  - Categorias por equipe/região
+  - Top performers destacados
+
+- **Sistema de Prêmios**:
+  - Prêmio Top 1 mensal
+  - Prêmios por categoria
+  - Badges de conquistas
+  - Recompensas personalizáveis
+
+## 3. Dashboards e Relatórios
+
+### 3.1 Dashboard do Usuário (Vendedor)
+- **Métricas Pessoais**:
+  - Leads gerados hoje/semana/mês
+  - Taxa de conversão por estágio
+  - Receita gerada
+  - Posição no ranking
+  - Metas vs. realizado
+
+- **Widgets Interativos**:
+  - Gráfico de funil de vendas
+  - Linha do tempo de atividades
+  - Próximas tarefas
+  - Campanhas ativas
+
+### 3.2 Dashboard do Gestor
+- **Visão Geral da Equipe**:
+  - Performance individual de cada vendedor
+  - Comparativo de resultados
+  - Distribuição de leads por vendedor
+  - Análise de conversão por canal
+
+- **Métricas Avançadas**:
+  - ROI por campanha
+  - Tempo médio de fechamento
+  - Ticket médio por vendedor
+  - Previsão de vendas
+
+- **Relatórios Executivos**:
+  - Relatório mensal de performance
+  - Análise de tendências
+  - Identificação de gargalos
+  - Recomendações de melhoria
+
+### 3.3 Dashboard Executivo
+- **KPIs Estratégicos**:
+  - Receita total
+  - Crescimento MoM/YoY
+  - CAC (Custo de Aquisição de Cliente)
+  - LTV (Lifetime Value)
+  - Churn rate
+
+- **Análises Estratégicas**:
+  - Segmentação de mercado
+  - Análise de competitividade
+  - Tendências de consumo
+  - Oportunidades de mercado
+
+## 4. Especificações Técnicas
+
+### 4.1 Arquitetura Recomendada
+
+#### 4.1.1 Frontend (Bubble)
+- **Interface Responsiva**:
+  - Design mobile-first
+  - Componentes reutilizáveis
+  - Tema consistente
+  - Acessibilidade (WCAG 2.1)
+
+- **Funcionalidades Avançadas**:
+  - Real-time updates
+  - Notificações push
+  - Offline capability
+  - PWA support
+
+#### 4.1.2 Backend (Supabase)
+- **Database PostgreSQL**:
+  - Estrutura otimizada para performance
+  - Índices estratégicos
+  - Backups automáticos
+  - Row Level Security (RLS)
+
+- **APIs e Integrações**:
+  - RESTful APIs
+  - Webhooks para integrações
+  - Rate limiting
+  - Autenticação JWT
+
+#### 4.1.3 Analytics (Power BI)
+- **Conectores Personalizados**:
+  - Integração direta com Supabase
+  - Atualizações automáticas
+  - Múltiplas fontes de dados
+  - Transformações ETL
+
+- **Dashboards Interativos**:
+  - Drill-down capabilities
+  - Filtros dinâmicos
+  - Alertas automáticos
+  - Exportação de relatórios
+
+### 4.2 Estrutura de Dados
+
+#### 4.2.1 Tabelas Principais
+```sql
+-- Empresas (dados CNPJ)
+companies (
+  id, cnpj, razao_social, nome_fantasia, 
+  setor, porte, faturamento, endereco, 
+  telefone, email, created_at, updated_at
+)
+
+-- Leads
+leads (
+  id, company_id, user_id, status, 
+  valor_estimado, prioridade, source,
+  created_at, updated_at
+)
+
+-- Interações
+interactions (
+  id, lead_id, tipo, canal, conteudo,
+  data_envio, data_resposta, status
+)
+
+-- Vendas
+sales (
+  id, lead_id, user_id, valor, data_fechamento,
+  comprovante_url, status_aprovacao, pontos
+)
+
+-- Usuários
+users (
+  id, nome, email, role, equipe_id,
+  pontos_totais, meta_mensal, created_at
+)
+
+-- Campanhas
+campaigns (
+  id, nome, tipo, template, segmentacao,
+  data_inicio, data_fim, status, metricas
+)
+```
+
+### 4.3 Integrações Externas
+
+#### 4.3.1 APIs de Dados
+- **Receita Federal**: Consulta de CNPJ
+- **Serasa/SPC**: Dados de crédito
+- **Google Maps**: Geolocalização
+- **Outras fontes**: Dados setoriais
+
+#### 4.3.2 Comunicação
+- **WhatsApp Business API**: Envio de mensagens
+- **SendGrid/Mailgun**: Envio de e-mails
+- **Twilio**: SMS e chamadas
+- **Calendly**: Agendamento de reuniões
+
+#### 4.3.3 Produtividade
+- **Google Workspace**: Integração com Gmail/Calendar
+- **Microsoft 365**: Integração com Outlook
+- **Slack**: Notificações de equipe
+- **Zapier**: Automações diversas
+
+## 5. Wireframes e User Stories
+
+### 5.1 User Stories Principais
+
+#### 5.1.1 Como Vendedor
+- **US001**: Como vendedor, quero buscar leads por CNPJ com filtros específicos para encontrar meu público-alvo
+- **US002**: Como vendedor, quero enviar mensagens automatizadas via WhatsApp para fazer primeiro contato
+- **US003**: Como vendedor, quero mover leads no Kanban para acompanhar o progresso das oportunidades
+- **US004**: Como vendedor, quero anexar comprovante de venda para pontuar no ranking
+- **US005**: Como vendedor, quero ver minha pontuação e posição no ranking para me motivar
+
+#### 5.1.2 Como Gestor
+- **US006**: Como gestor, quero ver performance individual de cada vendedor em dashboards
+- **US007**: Como gestor, quero aprovar/reprovar vendas baseado nos comprovantes enviados
+- **US008**: Como gestor, quero configurar metas e prêmios para a equipe
+- **US009**: Como gestor, quero analisar ROI das campanhas de prospecção
+- **US010**: Como gestor, quero exportar relatórios para apresentações executivas
+
+### 5.2 Fluxos de Navegação
+
+#### 5.2.1 Fluxo de Prospecção
+1. Dashboard → Geração de Leads
+2. Aplicar filtros → Visualizar resultados
+3. Selecionar leads → Criar campanha
+4. Configurar mensagem → Agendar envio
+5. Acompanhar métricas → Fazer follow-up
+
+#### 5.2.2 Fluxo de Gestão de Leads
+1. Dashboard → Kanban de Leads
+2. Visualizar cards → Arrastar para novo estágio
+3. Abrir detalhes → Adicionar interação
+4. Agendar follow-up → Salvar alterações
+5. Comprovante de venda → Upload de arquivo
+
+## 6. Cronograma de Desenvolvimento
+
+### 6.1 Fase 1 - MVP (8 semanas)
+- **Semanas 1-2**: Setup da infraestrutura (Supabase + Bubble)
+- **Semanas 3-4**: Módulo de geração de leads com CNPJ
+- **Semanas 5-6**: Sistema Kanban básico
+- **Semanas 7-8**: Sistema de pontuação e ranking
+
+### 6.2 Fase 2 - Automação (6 semanas)
+- **Semanas 9-10**: Integração WhatsApp Business API
+- **Semanas 11-12**: Sistema de e-mail marketing
+- **Semanas 13-14**: Dashboards Power BI básicos
+
+### 6.3 Fase 3 - Aprimoramentos (4 semanas)
+- **Semanas 15-16**: Gamificação avançada
+- **Semanas 17-18**: Dashboards executivos completos
+
+### 6.4 Fase 4 - Otimização (4 semanas)
+- **Semanas 19-20**: Testes de performance
+- **Semanas 21-22**: Ajustes e correções
+
+## 7. Critérios de Sucesso
+
+### 7.1 Métricas de Produto
+- **Adoção**: 80% da equipe usando diariamente
+- **Engagement**: 5+ leads gerados por usuário/dia
+- **Conversão**: 15% de leads para oportunidades
+- **Satisfação**: NPS > 70
+
+### 7.2 Métricas de Negócio
+- **ROI**: 300% em 6 meses
+- **Produtividade**: 50% aumento em vendas
+- **Eficiência**: 30% redução em tempo de prospecção
+- **Qualidade**: 90% de leads qualificados
+
+## 8. Riscos e Mitigações
+
+### 8.1 Riscos Técnicos
+- **Integração APIs**: Documentação e testes extensivos
+- **Performance**: Otimização de queries e caching
+- **Segurança**: Implementação de boas práticas
+- **Escalabilidade**: Arquitetura cloud-native
+
+### 8.2 Riscos de Negócio
+- **Adoção**: Programa de treinamento e suporte
+- **Concorrência**: Diferenciação por gamificação
+- **Regulamentação**: Compliance com LGPD
+- **Churn**: Programa de sucesso do cliente
+
+## 9. Próximos Passos
+
+### 9.1 Validação
+- [ ] Pesquisa com usuários potenciais
+- [ ] Prototipagem de telas críticas
+- [ ] Validação técnica das integrações
+- [ ] Análise de viabilidade financeira
+
+### 9.2 Preparação
+- [ ] Montagem da equipe de desenvolvimento
+- [ ] Setup do ambiente de desenvolvimento
+- [ ] Definição detalhada de sprints
+- [ ] Criação de documentação técnica
+
+---
+
+**Versão**: 1.0  
+**Data**: 04/07/2025  
+**Autor**: Produto baseado em experiência Supabase, Bubble e Power BI  
+**Status**: Proposta inicial para validação

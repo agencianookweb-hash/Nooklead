@@ -1,0 +1,185 @@
+flowchart TD
+    %% Início do Sistema
+    A[🚀 Usuário faz Login] --> B{Qual é o Role?}
+    
+    %% Divisão por Role
+    B -->|Vendedor| C[📊 Dashboard Vendedor]
+    B -->|Gestor| D[👔 Dashboard Gestor]
+    B -->|Admin| E[⚙️ Dashboard Admin]
+    
+    %% Fluxo do Vendedor
+    C --> F[🔍 Gerar Leads CNPJ]
+    F --> G[⚙️ Aplicar Filtros]
+    G --> H{Filtros aplicados?}
+    H -->|Sim| I[📋 Lista de Empresas]
+    H -->|Não| J[📋 Todas as Empresas]
+    
+    I --> K[✅ Selecionar Leads]
+    J --> K
+    K --> L{Ação desejada?}
+    
+    %% Fluxo de Prospecção
+    L -->|Prospectar| M[📱 Escolher Canal]
+    M --> N{Qual canal?}
+    N -->|WhatsApp| O[💬 Criar Campanha WhatsApp]
+    N -->|Email| P[📧 Criar Campanha Email]
+    N -->|Ambos| Q[🔄 Campanha Híbrida]
+    
+    O --> R[📝 Configurar Template]
+    P --> R
+    Q --> R
+    R --> S[⏰ Agendar Envio]
+    S --> T[🚀 Executar Campanha]
+    T --> U[📈 Acompanhar Métricas]
+    
+    %% Fluxo de Kanban
+    L -->|Gerenciar| V[📋 Kanban de Leads]
+    V --> W{Status atual do Lead?}
+    W -->|Novo| X[🆕 Novo Lead]
+    W -->|Contatado| Y[📞 Lead Contatado]
+    W -->|Interesse| Z[💡 Interesse Demonstrado]
+    W -->|Proposta| AA[📄 Proposta Enviada]
+    W -->|Negociação| BB[🤝 Em Negociação]
+    W -->|Fechado| CC[💰 Venda Fechada]
+    
+    %% Movimentação no Kanban
+    X --> DD[🔄 Arrastar para próximo status]
+    Y --> DD
+    Z --> DD
+    AA --> DD
+    BB --> DD
+    
+    DD --> EE[📝 Adicionar Interação]
+    EE --> FF[💾 Salvar Alterações]
+    FF --> GG[🔔 Notificar Gestor]
+    
+    %% Fluxo de Venda
+    CC --> HH[📋 Registrar Venda]
+    HH --> II[📎 Anexar Comprovante]
+    II --> JJ[💵 Informar Valor]
+    JJ --> KK[📅 Data de Fechamento]
+    KK --> LL[📤 Enviar para Aprovação]
+    LL --> MM[⏳ Aguardar Aprovação do Gestor]
+    
+    %% Fluxo do Gestor
+    D --> NN[👥 Visualizar Equipe]
+    NN --> OO{Ação do Gestor?}
+    OO -->|Aprovar Vendas| PP[✅ Aprovar/Rejeitar Vendas]
+    OO -->|Ver Performance| QQ[📊 Analisar Performance]
+    OO -->|Configurar Metas| RR[🎯 Definir Metas]
+    OO -->|Gerenciar Campanhas| SS[📢 Supervisionar Campanhas]
+    
+    %% Aprovação de Vendas
+    MM --> PP
+    PP --> TT{Decisão?}
+    TT -->|Aprovar| UU[✅ Venda Aprovada]
+    TT -->|Rejeitar| VV[❌ Venda Rejeitada]
+    
+    UU --> WW[🏆 Calcular Pontos]
+    WW --> XX[📈 Atualizar Ranking]
+    XX --> YY[🔔 Notificar Vendedor]
+    
+    VV --> ZZ[📝 Informar Motivo]
+    ZZ --> AAA[🔔 Notificar Vendedor]
+    
+    %% Sistema de Pontuação
+    WW --> BBB{Tipo de Pontos?}
+    BBB -->|Lead Gerado| CCC[+1 Ponto]
+    BBB -->|Primeiro Contato| DDD[+2 Pontos]
+    BBB -->|Interesse| EEE[+5 Pontos]
+    BBB -->|Proposta| FFF[+10 Pontos]
+    BBB -->|Venda| GGG[+50 Pontos + % Valor]
+    
+    CCC --> XX
+    DDD --> XX
+    EEE --> XX
+    FFF --> XX
+    GGG --> XX
+    
+    %% Ranking e Gamificação
+    XX --> HHH[🏆 Atualizar Ranking]
+    HHH --> III{É Top 1?}
+    III -->|Sim| JJJ[🥇 Prêmio Top 1]
+    III -->|Não| KKK[📊 Posição no Ranking]
+    
+    JJJ --> LLL[🎉 Conquista Desbloqueada]
+    KKK --> LLL
+    LLL --> MMM[🔔 Notificação de Conquista]
+    
+    %% Dashboards e Relatórios
+    QQ --> NNN[📈 Métricas da Equipe]
+    NNN --> OOO{Tipo de Análise?}
+    OOO -->|Individual| PPP[👤 Performance por Vendedor]
+    OOO -->|Equipe| QQQ[👥 Performance da Equipe]
+    OOO -->|Campanhas| RRR[📢 ROI das Campanhas]
+    OOO -->|Leads| SSS[🔍 Análise de Leads]
+    
+    PPP --> TTT[📊 Gerar Relatório]
+    QQQ --> TTT
+    RRR --> TTT
+    SSS --> TTT
+    
+    TTT --> UUU[📤 Exportar para Power BI]
+    UUU --> VVV[📊 Dashboard Executivo]
+    
+    %% Configurações de Admin
+    E --> WWW[⚙️ Configurações do Sistema]
+    WWW --> XXX{O que configurar?}
+    XXX -->|Usuários| YYY[👥 Gerenciar Usuários]
+    XXX -->|Integrações| ZZZ[🔗 APIs e Integrações]
+    XXX -->|Templates| AAAA[📝 Templates de Mensagem]
+    XXX -->|Pontuação| BBBB[🏆 Sistema de Pontos]
+    
+    %% Integrações Externas
+    ZZZ --> CCCC[🔌 Configurar Integrações]
+    CCCC --> DDDD{Qual integração?}
+    DDDD -->|WhatsApp API| EEEE[💬 WhatsApp Business]
+    DDDD -->|Email| FFFF[📧 SendGrid/Mailgun]
+    DDDD -->|CNPJ| GGGG[🏢 Receita Federal]
+    DDDD -->|Analytics| HHHH[📊 Power BI]
+    
+    %% Notificações do Sistema
+    YY --> IIII[🔔 Central de Notificações]
+    AAA --> IIII
+    MMM --> IIII
+    GG --> IIII
+    
+    IIII --> JJJJ{Tipo de Notificação?}
+    JJJJ -->|Email| KKKK[📧 Enviar Email]
+    JJJJ -->|Push| LLLL[📱 Notificação Push]
+    JJJJ -->|In-App| MMMM[🔔 Notificação na Aplicação]
+    
+    %% Métricas e Analytics
+    U --> NNNN[📊 Coletar Métricas]
+    NNNN --> OOOO{Métricas de?}
+    OOOO -->|Campanha| PPPP[📈 Taxa de Abertura]
+    OOOO -->|Conversão| QQQQ[💹 Taxa de Conversão]
+    OOOO -->|Vendas| RRRR[💰 Receita Gerada]
+    
+    PPPP --> UUU
+    QQQQ --> UUU
+    RRRR --> UUU
+    
+    %% Automações
+    T --> SSSS[🤖 Automações]
+    SSSS --> TTTT{Trigger acionado?}
+    TTTT -->|Lead não respondeu| UUUU[🔄 Follow-up Automático]
+    TTTT -->|Meta atingida| VVVV[🎉 Parabenizar Vendedor]
+    TTTT -->|Lead perdido| WWWW[📋 Análise de Motivo]
+    
+    UUUU --> T
+    VVVV --> IIII
+    WWWW --> NNN
+    
+    %% Styling
+    classDef startEnd fill:#e1f5fe
+    classDef process fill:#f3e5f5
+    classDef decision fill:#fff3e0
+    classDef action fill:#e8f5e8
+    classDef notification fill:#fce4ec
+    
+    class A,IIII startEnd
+    class F,M,V,HH,QQ decision
+    class C,D,E,NN,WWW process
+    class K,L,OO,XXX,JJJJ action
+    class YY,AAA,MMM,GG notification

@@ -1,0 +1,465 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// =============================================
+// ENUMS
+// =============================================
+
+enum UserRole {
+  VENDEDOR
+  GESTOR
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum CompanySize {
+  MEI
+  ME
+  EPP
+  GRANDE
+}
+
+enum CompanyStatus {
+  ATIVA
+  SUSPENSA
+  INAPTA
+  BAIXADA
+}
+
+enum LeadStatus {
+  NOVO
+  CONTATADO
+  INTERESSE
+  PROPOSTA_ENVIADA
+  NEGOCIACAO
+  FECHADO_GANHO
+  FECHADO_PERDIDO
+}
+
+enum LeadSource {
+  BUSCA_CNPJ
+  INDICACAO
+  INBOUND
+  EVENTO
+  CAMPANHA
+  OUTROS
+}
+
+enum LeadPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  URGENTE
+}
+
+enum InteractionType {
+  WHATSAPP
+  EMAIL
+  LIGACAO
+  REUNIAO
+  PROPOSTA
+  CONTRATO
+  OUTROS
+}
+
+enum InteractionStatus {
+  ENVIADO
+  ENTREGUE
+  VISUALIZADO
+  RESPONDIDO
+  FALHADO
+}
+
+enum CampaignType {
+  WHATSAPP
+  EMAIL
+  SMS
+  HIBRIDA
+}
+
+enum CampaignStatus {
+  RASCUNHO
+  AGENDADA
+  EXECUTANDO
+  PAUSADA
+  FINALIZADA
+  CANCELADA
+}
+
+enum SaleStatus {
+  PENDENTE_APROVACAO
+  APROVADA
+  REJEITADA
+  EM_ANALISE
+}
+
+enum NotificationType {
+  LEAD_NOVO
+  LEAD_INTERESSE
+  VENDA_APROVADA
+  RANKING_ATUALIZADO
+  META_ATINGIDA
+  CAMPANHA_FINALIZADA
+}
+
+// =============================================
+// MODELS
+// =============================================
+
+model User {
+  id            String   @id @default(cuid())
+  email         String   @unique
+  name          String
+  avatar        String?
+  role          UserRole @default(VENDEDOR)
+  isActive      Boolean  @default(true)
+  phone         String?
+  
+  // Gamificação
+  totalPoints   Int      @default(0)
+  monthlyPoints Int      @default(0)
+  monthlyGoal   Int      @default(0)
+  
+  // Relacionamentos
+  teamId        String?
+  team          Team?     @relation(fields: [teamId], references: [id])
+  managerId     String?
+  manager       User?     @relation("UserManager", fields: [managerId], references: [id])
+  subordinates  User[]    @relation("UserManager")
+  
+  // Atividades
+  leads         Lead[]
+  interactions  Interaction[]
+  sales         Sale[]
+  campaigns     Campaign[]
+  notifications Notification[]
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("users")
+}
+
+model Team {
+  id          String @id @default(cuid())
+  name        String
+  description String?
+  isActive    Boolean @default(true)
+  
+  // Relacionamentos
+  users       User[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  
+  @@map("teams")
+}
+
+model Company {
+  id              String        @id @default(cuid())
+  cnpj            String        @unique
+  razaoSocial     String
+  nomeFantasia    String?
+  
+  // Dados empresariais
+  setor           String?
+  cnae            String?
+  size            CompanySize?
+  status          CompanyStatus @default(ATIVA)
+  faturamento     Float?
+  
+  // Contato
+  email           String?
+  phone           String?
+  website         String?
+  
+  // Endereço
+  cep             String?
+  logradouro      String?
+  numero          String?
+  complemento     String?
+  bairro          String?
+  cidade          String?
+  uf              String?
+  
+  // Dados da Receita Federal
+  dataAbertura    DateTime?
+  capitalSocial   Float?
+  naturezaJuridica String?
+  
+  // Enriquecimento
+  numeroFuncionarios Int?
+  ramo            String?
+  segmento        String?
+  
+  // Relacionamentos
+  leads           Lead[]
+  
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  @@map("companies")
+}
+
+model Lead {
+  id             String        @id @default(cuid())
+  status         LeadStatus    @default(NOVO)
+  source         LeadSource    @default(BUSCA_CNPJ)
+  priority       LeadPriority  @default(MEDIA)
+  
+  // Oportunidade
+  estimatedValue Float?
+  closingDate    DateTime?
+  
+  // Observações
+  notes          String?
+  tags           String[]
+  
+  // Relacionamentos
+  companyId      String
+  company        Company       @relation(fields: [companyId], references: [id])
+  userId         String
+  user           User          @relation(fields: [userId], references: [id])
+  
+  // Atividades
+  interactions   Interaction[]
+  sales          Sale[]
+  
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  
+  @@map("leads")
+}
+
+model Interaction {
+  id          String            @id @default(cuid())
+  type        InteractionType
+  status      InteractionStatus @default(ENVIADO)
+  
+  // Conteúdo
+  subject     String?
+  content     String
+  attachments String[]
+  
+  // Métricas
+  sentAt      DateTime?
+  deliveredAt DateTime?
+  viewedAt    DateTime?
+  respondedAt DateTime?
+  
+  // Relacionamentos
+  leadId      String
+  lead        Lead              @relation(fields: [leadId], references: [id])
+  userId      String
+  user        User              @relation(fields: [userId], references: [id])
+  campaignId  String?
+  campaign    Campaign?         @relation(fields: [campaignId], references: [id])
+  
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  
+  @@map("interactions")
+}
+
+model Campaign {
+  id            String         @id @default(cuid())
+  name          String
+  type          CampaignType
+  status        CampaignStatus @default(RASCUNHO)
+  
+  // Configuração
+  subject       String?
+  template      String
+  segmentation  Json?
+  
+  // Agendamento
+  scheduledAt   DateTime?
+  startedAt     DateTime?
+  finishedAt    DateTime?
+  
+  // Métricas
+  totalSent     Int            @default(0)
+  totalDelivered Int           @default(0)
+  totalViewed   Int            @default(0)
+  totalResponded Int           @default(0)
+  
+  // Relacionamentos
+  userId        String
+  user          User           @relation(fields: [userId], references: [id])
+  interactions  Interaction[]
+  
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  
+  @@map("campaigns")
+}
+
+model Sale {
+  id               String     @id @default(cuid())
+  value            Float
+  closingDate      DateTime
+  status           SaleStatus @default(PENDENTE_APROVACAO)
+  
+  // Comprovação
+  proofUrl         String?
+  proofType        String?
+  
+  // Produto/Serviço
+  productService   String?
+  description      String?
+  
+  // Pontuação
+  points           Int        @default(0)
+  
+  // Aprovação
+  approvedBy       String?
+  approvedAt       DateTime?
+  rejectionReason  String?
+  
+  // Relacionamentos
+  leadId           String
+  lead             Lead       @relation(fields: [leadId], references: [id])
+  userId           String
+  user             User       @relation(fields: [userId], references: [id])
+  
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  
+  @@map("sales")
+}
+
+model Ranking {
+  id            String   @id @default(cuid())
+  period        String   // "2024-01", "2024-Q1", "2024"
+  periodType    String   // "monthly", "quarterly", "yearly"
+  
+  // Métricas
+  totalPoints   Int
+  totalSales    Int
+  totalRevenue  Float
+  position      Int
+  
+  // Relacionamentos
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@unique([userId, period])
+  @@map("rankings")
+}
+
+model Goal {
+  id            String   @id @default(cuid())
+  title         String
+  description   String?
+  
+  // Configuração
+  targetValue   Float
+  currentValue  Float    @default(0)
+  unit          String   // "leads", "sales", "revenue"
+  
+  // Período
+  startDate     DateTime
+  endDate       DateTime
+  
+  // Relacionamentos
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("goals")
+}
+
+model Achievement {
+  id            String   @id @default(cuid())
+  title         String
+  description   String
+  icon          String?
+  points        Int      @default(0)
+  
+  // Relacionamentos
+  userId        String
+  user          User     @relation(fields: [userId], references: [id])
+  
+  unlockedAt    DateTime @default(now())
+  
+  @@map("achievements")
+}
+
+model Notification {
+  id            String           @id @default(cuid())
+  type          NotificationType
+  title         String
+  message       String
+  
+  // Status
+  isRead        Boolean          @default(false)
+  readAt        DateTime?
+  
+  // Dados adicionais
+  metadata      Json?
+  
+  // Relacionamentos
+  userId        String
+  user          User             @relation(fields: [userId], references: [id])
+  
+  createdAt     DateTime         @default(now())
+  
+  @@map("notifications")
+}
+
+model SystemConfig {
+  id            String   @id @default(cuid())
+  key           String   @unique
+  value         String
+  description   String?
+  
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  @@map("system_configs")
+}
+
+model AuditLog {
+  id            String   @id @default(cuid())
+  action        String   // "CREATE", "UPDATE", "DELETE"
+  table         String
+  recordId      String
+  
+  // Dados
+  oldValues     Json?
+  newValues     Json?
+  
+  // Relacionamentos
+  userId        String?
+  userEmail     String?
+  
+  createdAt     DateTime @default(now())
+  
+  @@map("audit_logs")
+}
+
+// =============================================
+// MISSING RELATIONS
+// =============================================
+
+// Adicionando relações que faltaram
+model User {
+  // ... campos existentes ...
+  rankings      Ranking[]
+  goals         Goal[]
+  achievements  Achievement[]
+}
