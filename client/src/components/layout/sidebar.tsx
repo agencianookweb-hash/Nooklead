@@ -14,6 +14,7 @@ import {
   Users,
   CheckCircle,
   LogOut,
+  BarChart3,
 } from "lucide-react";
 
 const navigation = [
@@ -25,6 +26,7 @@ const navigation = [
 ];
 
 const managerNavigation = [
+  { name: "Dashboard Gerencial", href: "/manager-dashboard", icon: BarChart3 },
   { name: "Equipe", href: "/team", icon: Users },
   { name: "Aprovações", href: "/approvals", icon: CheckCircle, badge: 3 },
 ];

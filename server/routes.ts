@@ -251,6 +251,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Manager Dashboard routes
+  app.get('/api/manager/team-stats', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Fetch user role from database since it may not be in JWT claims
+      const user = await storage.getUser(userId);
+      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized to view manager dashboard" });
+      }
+      
+      const { period = '30d' } = req.query;
+      const stats = await storage.getTeamStats(userId);
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching manager team stats:", error);
+      res.status(500).json({ message: "Failed to fetch manager team stats" });
+    }
+  });
+
   // Rankings routes
   app.get('/api/rankings', isAuthenticated, async (req, res) => {
     try {

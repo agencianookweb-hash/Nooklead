@@ -6,6 +6,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth } from "@/hooks/useAuth";
 import Landing from "@/pages/landing";
 import Dashboard from "@/pages/dashboard";
+import ManagerDashboard from "@/pages/manager-dashboard";
 import Leads from "@/pages/leads";
 import Kanban from "@/pages/kanban";
 import Sales from "@/pages/sales";
@@ -39,6 +40,7 @@ function Router() {
               <Header />
               <main className="p-6">
                 <Route path="/" component={Dashboard} />
+                <Route path="/manager-dashboard" component={ManagerDashboard} />
                 <Route path="/leads" component={Leads} />
                 <Route path="/kanban" component={Kanban} />
                 <Route path="/sales" component={Sales} />
