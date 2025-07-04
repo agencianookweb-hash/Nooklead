@@ -27,12 +27,12 @@ export default function FiltersPanel({ filters, onFiltersChange }: FiltersPanelP
       <CardContent className="space-y-4">
         <div>
           <Label htmlFor="setor">CNAE/Setor</Label>
-          <Select value={filters.setor || ""} onValueChange={(value) => handleFilterChange("setor", value)}>
+          <Select value={filters.setor || "all"} onValueChange={(value) => handleFilterChange("setor", value === "all" ? "" : value)}>
             <SelectTrigger>
               <SelectValue placeholder="Todos os setores" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos os setores</SelectItem>
+              <SelectItem value="all">Todos os setores</SelectItem>
               <SelectItem value="Tecnologia">Tecnologia</SelectItem>
               <SelectItem value="Varejo">Varejo</SelectItem>
               <SelectItem value="Serviços">Serviços</SelectItem>
@@ -45,12 +45,12 @@ export default function FiltersPanel({ filters, onFiltersChange }: FiltersPanelP
 
         <div>
           <Label htmlFor="size">Porte</Label>
-          <Select value={filters.size || ""} onValueChange={(value) => handleFilterChange("size", value)}>
+          <Select value={filters.size || "all"} onValueChange={(value) => handleFilterChange("size", value === "all" ? "" : value)}>
             <SelectTrigger>
               <SelectValue placeholder="Todos os portes" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos os portes</SelectItem>
+              <SelectItem value="all">Todos os portes</SelectItem>
               <SelectItem value="MEI">MEI</SelectItem>
               <SelectItem value="ME">ME - Microempresa</SelectItem>
               <SelectItem value="EPP">EPP - Pequeno Porte</SelectItem>
@@ -61,12 +61,12 @@ export default function FiltersPanel({ filters, onFiltersChange }: FiltersPanelP
 
         <div>
           <Label htmlFor="uf">Estado</Label>
-          <Select value={filters.uf || ""} onValueChange={(value) => handleFilterChange("uf", value)}>
+          <Select value={filters.uf || "all"} onValueChange={(value) => handleFilterChange("uf", value === "all" ? "" : value)}>
             <SelectTrigger>
               <SelectValue placeholder="Todos os estados" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Todos os estados</SelectItem>
+              <SelectItem value="all">Todos os estados</SelectItem>
               <SelectItem value="SP">São Paulo</SelectItem>
               <SelectItem value="RJ">Rio de Janeiro</SelectItem>
               <SelectItem value="MG">Minas Gerais</SelectItem>
@@ -78,12 +78,12 @@ export default function FiltersPanel({ filters, onFiltersChange }: FiltersPanelP
 
         <div>
           <Label htmlFor="faturamento">Faturamento</Label>
-          <Select value={filters.faturamento || ""} onValueChange={(value) => handleFilterChange("faturamento", value)}>
+          <Select value={filters.faturamento || "all"} onValueChange={(value) => handleFilterChange("faturamento", value === "all" ? "" : value)}>
             <SelectTrigger>
               <SelectValue placeholder="Qualquer faturamento" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">Qualquer faturamento</SelectItem>
+              <SelectItem value="all">Qualquer faturamento</SelectItem>
               <SelectItem value="100k">Até R$ 100K</SelectItem>
               <SelectItem value="500k">R$ 100K - R$ 500K</SelectItem>
               <SelectItem value="2m">R$ 500K - R$ 2M</SelectItem>
