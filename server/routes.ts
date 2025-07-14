@@ -283,6 +283,96 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Team management routes
+  app.get('/api/team/members', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Check if user is authorized to manage team
+      const user = await storage.getUser(userId);
+      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized to manage team" });
+      }
+      
+      const members = await storage.getTeamMembers(userId);
+      res.json(members);
+    } catch (error) {
+      console.error("Error fetching team members:", error);
+      res.status(500).json({ message: "Failed to fetch team members" });
+    }
+  });
+
+  app.post('/api/team/members', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      
+      // Check if user is authorized to manage team
+      const user = await storage.getUser(userId);
+      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized to manage team" });
+      }
+      
+      const { email, firstName, lastName, phone, monthlyGoal } = req.body;
+      
+      if (!email || !firstName || !lastName || !monthlyGoal) {
+        return res.status(400).json({ message: "Email, first name, last name and monthly goal are required" });
+      }
+      
+      const newMember = await storage.createTeamMember({
+        email,
+        firstName,
+        lastName,
+        phone,
+        managerId: userId,
+        monthlyGoal: parseInt(monthlyGoal),
+      });
+      
+      res.status(201).json(newMember);
+    } catch (error) {
+      console.error("Error creating team member:", error);
+      res.status(500).json({ message: "Failed to create team member" });
+    }
+  });
+
+  app.patch('/api/team/members/:memberId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { memberId } = req.params;
+      
+      // Check if user is authorized to manage team
+      const user = await storage.getUser(userId);
+      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized to manage team" });
+      }
+      
+      const updates = req.body;
+      const updatedMember = await storage.updateTeamMember(memberId, updates);
+      res.json(updatedMember);
+    } catch (error) {
+      console.error("Error updating team member:", error);
+      res.status(500).json({ message: "Failed to update team member" });
+    }
+  });
+
+  app.delete('/api/team/members/:memberId', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user.claims.sub;
+      const { memberId } = req.params;
+      
+      // Check if user is authorized to manage team
+      const user = await storage.getUser(userId);
+      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+        return res.status(403).json({ message: "Not authorized to manage team" });
+      }
+      
+      await storage.deactivateTeamMember(memberId);
+      res.json({ message: "Team member deactivated successfully" });
+    } catch (error) {
+      console.error("Error deactivating team member:", error);
+      res.status(500).json({ message: "Failed to deactivate team member" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

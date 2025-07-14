@@ -57,6 +57,8 @@ export interface User {
   lastName?: string;
   profileImageUrl?: string;
   role: "VENDEDOR" | "GESTOR" | "ADMIN" | "SUPER_ADMIN";
+  isActive: boolean;
+  phone?: string;
   totalPoints: number;
   monthlyPoints: number;
   monthlyGoal: number;

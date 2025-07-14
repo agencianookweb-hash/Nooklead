@@ -69,6 +69,12 @@ export interface IStorage {
   // Dashboard operations
   getDashboardStats(userId: string): Promise<any>;
   getTeamStats(managerId: string): Promise<any>;
+  
+  // Team management operations
+  getTeamMembers(managerId?: string): Promise<User[]>;
+  createTeamMember(userData: { email: string; firstName: string; lastName: string; phone?: string; managerId: string; teamId?: string; monthlyGoal: number }): Promise<User>;
+  updateTeamMember(userId: string, updates: Partial<User>): Promise<User>;
+  deactivateTeamMember(userId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -308,6 +314,80 @@ export class DatabaseStorage implements IStorage {
       totalRevenue: revenue[0]?.total || 0,
       goalAttainment: 87, // Calculate based on actual goals
     };
+  }
+
+  // Team management operations
+  async getTeamMembers(managerId?: string): Promise<User[]> {
+    if (managerId) {
+      return await db
+        .select()
+        .from(users)
+        .where(and(
+          eq(users.managerId, managerId),
+          eq(users.isActive, true)
+        ));
+    }
+    
+    return await db
+      .select()
+      .from(users)
+      .where(eq(users.isActive, true));
+  }
+
+  async createTeamMember(userData: { 
+    email: string; 
+    firstName: string; 
+    lastName: string; 
+    phone?: string; 
+    managerId: string; 
+    teamId?: string; 
+    monthlyGoal: number;
+  }): Promise<User> {
+    // Generate a unique ID for the new user
+    const userId = Math.random().toString(36).substr(2, 9);
+    
+    const [user] = await db
+      .insert(users)
+      .values({
+        id: userId,
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+        role: "VENDEDOR",
+        managerId: userData.managerId,
+        teamId: userData.teamId,
+        monthlyGoal: userData.monthlyGoal,
+        isActive: true,
+        totalPoints: 0,
+        monthlyPoints: 0,
+      })
+      .returning();
+    
+    return user;
+  }
+
+  async updateTeamMember(userId: string, updates: Partial<User>): Promise<User> {
+    const [user] = await db
+      .update(users)
+      .set({
+        ...updates,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId))
+      .returning();
+    
+    return user;
+  }
+
+  async deactivateTeamMember(userId: string): Promise<void> {
+    await db
+      .update(users)
+      .set({
+        isActive: false,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
   }
 }
 
