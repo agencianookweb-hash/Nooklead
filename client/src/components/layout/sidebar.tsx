@@ -15,6 +15,7 @@ import {
   CheckCircle,
   LogOut,
   BarChart3,
+  Settings,
 } from "lucide-react";
 
 const navigation = [
@@ -29,6 +30,7 @@ const managerNavigation = [
   { name: "Dashboard Gerencial", href: "/manager-dashboard", icon: BarChart3 },
   { name: "Equipe", href: "/team", icon: Users },
   { name: "Aprovações", href: "/approvals", icon: CheckCircle, badge: 3 },
+  { name: "Configuração Inicial", href: "/onboarding", icon: Settings },
 ];
 
 export default function Sidebar() {
