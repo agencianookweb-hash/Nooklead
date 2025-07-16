@@ -373,6 +373,69 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Onboarding routes
+  app.post('/api/onboarding', async (req, res) => {
+    try {
+      const {
+        companyName,
+        cnpj,
+        businessSector,
+        companySize,
+        managerName,
+        managerCpf,
+        managerEmail,
+        managerPhone,
+        cep,
+        address,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
+        salesGoal,
+        teamSize,
+        description,
+      } = req.body;
+
+      // Validation
+      if (!companyName || !cnpj || !businessSector || !companySize ||
+          !managerName || !managerCpf || !managerEmail || !managerPhone ||
+          !cep || !address || !number || !neighborhood || !city || !state ||
+          !salesGoal || !teamSize) {
+        return res.status(400).json({ message: "Missing required fields" });
+      }
+
+      const result = await storage.createCompanyOnboarding({
+        companyName,
+        cnpj,
+        businessSector,
+        companySize,
+        managerName,
+        managerCpf,
+        managerEmail,
+        managerPhone,
+        cep,
+        address,
+        number,
+        complement,
+        neighborhood,
+        city,
+        state,
+        salesGoal: parseInt(salesGoal),
+        teamSize: parseInt(teamSize),
+        description,
+      });
+
+      res.status(201).json({
+        message: "Company onboarding completed successfully",
+        data: result,
+      });
+    } catch (error) {
+      console.error("Error processing onboarding:", error);
+      res.status(500).json({ message: "Failed to process onboarding" });
+    }
+  });
+
   const httpServer = createServer(app);
   return httpServer;
 }

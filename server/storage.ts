@@ -75,6 +75,28 @@ export interface IStorage {
   createTeamMember(userData: { email: string; firstName: string; lastName: string; phone?: string; managerId: string; teamId?: string; monthlyGoal: number }): Promise<User>;
   updateTeamMember(userId: string, updates: Partial<User>): Promise<User>;
   deactivateTeamMember(userId: string): Promise<void>;
+  
+  // Onboarding operations
+  createCompanyOnboarding(data: {
+    companyName: string;
+    cnpj: string;
+    businessSector: string;
+    companySize: string;
+    managerName: string;
+    managerCpf: string;
+    managerEmail: string;
+    managerPhone: string;
+    cep: string;
+    address: string;
+    number: string;
+    complement?: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    salesGoal: number;
+    teamSize: number;
+    description?: string;
+  }): Promise<{ company: Company; user: User }>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -388,6 +410,80 @@ export class DatabaseStorage implements IStorage {
         updatedAt: new Date(),
       })
       .where(eq(users.id, userId));
+  }
+
+  // Onboarding operations
+  async createCompanyOnboarding(data: {
+    companyName: string;
+    cnpj: string;
+    businessSector: string;
+    companySize: string;
+    managerName: string;
+    managerCpf: string;
+    managerEmail: string;
+    managerPhone: string;
+    cep: string;
+    address: string;
+    number: string;
+    complement?: string;
+    neighborhood: string;
+    city: string;
+    state: string;
+    salesGoal: number;
+    teamSize: number;
+    description?: string;
+  }): Promise<{ company: Company; user: User }> {
+    // Generate unique IDs
+    const companyId = Math.random().toString(36).substr(2, 9);
+    const managerId = Math.random().toString(36).substr(2, 9);
+
+    // Clean CNPJ and CPF (remove formatting)
+    const cleanCnpj = data.cnpj.replace(/\D/g, '');
+    const cleanCpf = data.managerCpf.replace(/\D/g, '');
+
+    // Create company
+    const [company] = await db
+      .insert(companies)
+      .values({
+        id: companyId,
+        cnpj: cleanCnpj,
+        razaoSocial: data.companyName,
+        nomeFantasia: data.companyName,
+        setor: data.businessSector,
+        size: data.companySize as "MEI" | "ME" | "EPP" | "GRANDE",
+        cep: data.cep.replace(/\D/g, ''),
+        logradouro: data.address,
+        numero: data.number,
+        complemento: data.complement,
+        bairro: data.neighborhood,
+        cidade: data.city,
+        uf: data.state,
+      })
+      .returning();
+
+    // Split manager name
+    const nameParts = data.managerName.trim().split(' ');
+    const firstName = nameParts[0];
+    const lastName = nameParts.slice(1).join(' ') || '';
+
+    // Create manager user
+    const [user] = await db
+      .insert(users)
+      .values({
+        id: managerId,
+        email: data.managerEmail,
+        firstName,
+        lastName,
+        phone: data.managerPhone,
+        role: "GESTOR",
+        isActive: true,
+        totalPoints: 0,
+        monthlyPoints: 0,
+        monthlyGoal: data.salesGoal,
+      })
+      .returning();
+
+    return { company, user };
   }
 }
 

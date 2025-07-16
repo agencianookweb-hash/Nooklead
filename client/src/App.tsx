@@ -13,6 +13,7 @@ import Sales from "@/pages/sales";
 import Ranking from "@/pages/ranking";
 import Team from "@/pages/team";
 import Approvals from "@/pages/approvals";
+import Onboarding from "@/pages/onboarding";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
@@ -47,6 +48,7 @@ function Router() {
                 <Route path="/ranking" component={Ranking} />
                 <Route path="/team" component={Team} />
                 <Route path="/approvals" component={Approvals} />
+                <Route path="/onboarding" component={Onboarding} />
               </main>
             </div>
           </div>
