@@ -53,6 +53,14 @@ CRM CNPJ is a comprehensive B2B lead generation and sales management platform th
 - **Document Management**: File upload support for sale proofs
 - **Point System**: Gamification points calculation based on sale values
 
+### Business Onboarding System
+- **Multi-step Form**: 4-step onboarding process for new managers
+- **Company Registration**: Complete company data collection with CNPJ validation
+- **Manager Setup**: Responsible person data with CPF and contact information
+- **Address Collection**: Complete Brazilian address with state selection
+- **Initial Configuration**: Sales goals and team size setup
+- **Document Formatting**: Automatic formatting for CNPJ, CPF, and CEP
+
 ### Gamification Engine
 - **Ranking System**: User leaderboards with point calculations
 - **Achievement System**: Badge and milestone tracking
@@ -139,6 +147,7 @@ CRM CNPJ is a comprehensive B2B lead generation and sales management platform th
 
 ```
 Changelog:
+- July 16, 2025. Added business onboarding form for managers with multi-step interface
 - July 04, 2025. Initial setup
 ```
 
