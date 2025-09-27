@@ -98,6 +98,22 @@ const blacklistKeywords: Record<string, string[]> = {
   ]
 };
 
+// WhatsApp validation configuration
+const VALIDATION_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+const VALIDATION_COSTS = {
+  FORMAT_ONLY: 0,
+  WHATSAPP_API: 0.01, // $0.01 per validation
+  MAYTAPI: 0.005, // $0.005 per validation
+} as const;
+
+// Daily validation limits per user role
+const DAILY_VALIDATION_LIMITS = {
+  VENDEDOR: 1000,
+  GESTOR: 5000,
+  ADMIN: 10000,
+  SUPER_ADMIN: 50000,
+} as const;
+
 // Automatic blacklist detection functions
 function detectBlacklistByCnae(cnae: string): string | null {
   if (!cnae) return null;
@@ -363,6 +379,558 @@ async function processContactsList(contacts: any[], campaignId: string, userId?:
   }
   
   return { validContacts, invalidContacts, duplicates, blacklisted };
+}
+
+// WhatsApp validation service functions
+async function checkDailyValidationLimit(userId: string, userRole: string): Promise<{ canValidate: boolean; remaining: number; limit: number }> {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  const dailyStats = await storage.getValidationCostsByUser(userId, today, tomorrow);
+  const limit = DAILY_VALIDATION_LIMITS[userRole as keyof typeof DAILY_VALIDATION_LIMITS] || DAILY_VALIDATION_LIMITS.VENDEDOR;
+  const remaining = Math.max(0, limit - dailyStats.totalValidations);
+
+  return {
+    canValidate: remaining > 0,
+    remaining,
+    limit
+  };
+}
+
+// Mock WhatsApp Business API validation (replace with real API in production)
+async function validatePhoneWithWhatsAppAPI(phone: string): Promise<{
+  status: 'VALID_WHATSAPP' | 'VALID_NO_WHATSAPP' | 'INVALID';
+  whatsappEnabled: boolean;
+  cost: number;
+  provider: string;
+  responseData: any;
+}> {
+  // Simulate API delay
+  await new Promise(resolve => setTimeout(resolve, 100 + Math.random() * 400));
+
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  // Mock validation logic - replace with real WhatsApp Business API
+  if (cleanPhone.length < 10 || cleanPhone.length > 15) {
+    return {
+      status: 'INVALID',
+      whatsappEnabled: false,
+      cost: VALIDATION_COSTS.WHATSAPP_API,
+      provider: 'whatsapp_api',
+      responseData: { error: 'Invalid phone number format' }
+    };
+  }
+
+  // Simulate different scenarios based on phone number patterns
+  const lastDigit = parseInt(cleanPhone.slice(-1));
+  const hasWhatsApp = lastDigit % 3 !== 0; // ~67% have WhatsApp
+  const isValid = lastDigit !== 0; // ~90% are valid numbers
+
+  if (!isValid) {
+    return {
+      status: 'INVALID',
+      whatsappEnabled: false,
+      cost: VALIDATION_COSTS.WHATSAPP_API,
+      provider: 'whatsapp_api',
+      responseData: { error: 'Phone number not in service' }
+    };
+  }
+
+  return {
+    status: hasWhatsApp ? 'VALID_WHATSAPP' : 'VALID_NO_WHATSAPP',
+    whatsappEnabled: hasWhatsApp,
+    cost: VALIDATION_COSTS.WHATSAPP_API,
+    provider: 'whatsapp_api',
+    responseData: {
+      phone: phone,
+      whatsapp_enabled: hasWhatsApp,
+      is_business: Math.random() > 0.8, // ~20% business accounts
+      profile_name: hasWhatsApp ? `User ${cleanPhone.slice(-4)}` : null
+    }
+  };
+}
+
+// Main phone validation function with quota enforcement and proper event tracking
+async function validatePhoneNumber(phone: string, userId: string, userRole: string, forceRefresh = false, batchId?: string): Promise<{
+  phone: string;
+  status: 'VALID_WHATSAPP' | 'VALID_NO_WHATSAPP' | 'INVALID' | 'BLACKLISTED' | 'ERROR';
+  whatsappEnabled: boolean;
+  cost: number;
+  fromCache: boolean;
+  expiresAt?: Date;
+  responseData?: any;
+  errorMessage?: string;
+}> {
+  const formattedPhone = formatBrazilianPhone(phone);
+  
+  try {
+    // Check if phone is blacklisted first (free operation)
+    const isBlacklisted = await storage.isPhoneBlacklisted(formattedPhone);
+    if (isBlacklisted) {
+      await storage.recordValidationEvent({
+        phone: formattedPhone,
+        validationStatus: 'BLACKLISTED',
+        whatsappEnabled: false,
+        validationProvider: 'blacklist_check',
+        validationCost: "0",
+        validatedBy: userId,
+        fromCache: false,
+        batchId,
+      });
+
+      return {
+        phone: formattedPhone,
+        status: 'BLACKLISTED',
+        whatsappEnabled: false,
+        cost: 0,
+        fromCache: false,
+        errorMessage: 'Phone number is blacklisted'
+      };
+    }
+
+    // Check cache first (unless force refresh) - free operation
+    if (!forceRefresh) {
+      const cachedValidation = await storage.getCachedValidation(formattedPhone);
+      if (cachedValidation) {
+        await storage.recordValidationEvent({
+          phone: formattedPhone,
+          validationStatus: cachedValidation.validationStatus,
+          whatsappEnabled: cachedValidation.whatsappEnabled,
+          validationProvider: cachedValidation.validationProvider || 'cache',
+          validationCost: "0", // Cache hits are free
+          validatedBy: userId,
+          fromCache: true,
+          batchId,
+        });
+
+        return {
+          phone: formattedPhone,
+          status: cachedValidation.validationStatus as any,
+          whatsappEnabled: cachedValidation.whatsappEnabled || false,
+          cost: 0,
+          fromCache: true,
+          expiresAt: cachedValidation.expiresAt || undefined,
+          responseData: cachedValidation.responseData
+        };
+      }
+    }
+
+    // Basic format validation (free operation)
+    if (!isValidBrazilianPhone(phone)) {
+      const expiresAt = new Date(Date.now() + VALIDATION_CACHE_TTL);
+      
+      await storage.recordValidationEvent({
+        phone: formattedPhone,
+        validationStatus: 'INVALID',
+        whatsappEnabled: false,
+        validationProvider: 'format_only',
+        validationCost: "0",
+        errorMessage: 'Invalid phone number format',
+        validatedBy: userId,
+        fromCache: false,
+        batchId,
+      });
+
+      await storage.saveCachedValidation({
+        phone: formattedPhone,
+        validationStatus: 'INVALID',
+        whatsappEnabled: false,
+        validationProvider: 'format_only',
+        expiresAt,
+      });
+
+      return {
+        phone: formattedPhone,
+        status: 'INVALID',
+        whatsappEnabled: false,
+        cost: 0,
+        fromCache: false,
+        errorMessage: 'Invalid phone number format'
+      };
+    }
+
+    // CHECK QUOTA before making costly API call
+    const { canValidate, remaining } = await checkDailyValidationLimit(userId, userRole);
+    if (!canValidate || remaining <= 0) {
+      throw new Error(`Daily validation limit exceeded. You have ${remaining} validations remaining today.`);
+    }
+
+    // Call WhatsApp API validation (COSTS QUOTA - ENFORCE LIMIT HERE)
+    const apiResult = await validatePhoneWithWhatsAppAPI(formattedPhone);
+    const expiresAt = new Date(Date.now() + VALIDATION_CACHE_TTL);
+
+    // Record API call as validation event (PAID - counts toward quota)
+    await storage.recordValidationEvent({
+      phone: formattedPhone,
+      validationStatus: apiResult.status,
+      whatsappEnabled: apiResult.whatsappEnabled,
+      validationProvider: apiResult.provider,
+      validationCost: apiResult.cost.toString(),
+      responseData: apiResult.responseData,
+      validatedBy: userId,
+      fromCache: false,
+      batchId,
+    });
+
+    // Save to cache for future performance
+    await storage.saveCachedValidation({
+      phone: formattedPhone,
+      validationStatus: apiResult.status,
+      whatsappEnabled: apiResult.whatsappEnabled,
+      validationProvider: apiResult.provider,
+      responseData: apiResult.responseData,
+      expiresAt,
+    });
+
+    return {
+      phone: formattedPhone,
+      status: apiResult.status,
+      whatsappEnabled: apiResult.whatsappEnabled,
+      cost: apiResult.cost,
+      fromCache: false,
+      expiresAt,
+      responseData: apiResult.responseData
+    };
+
+  } catch (error) {
+    console.error('Error validating phone number:', error);
+    
+    // Record error as validation event
+    await storage.recordValidationEvent({
+      phone: formattedPhone,
+      validationStatus: 'ERROR',
+      whatsappEnabled: false,
+      validationProvider: 'error',
+      validationCost: "0",
+      errorMessage: error instanceof Error ? error.message : 'Unknown validation error',
+      validatedBy: userId,
+      fromCache: false,
+      batchId,
+    });
+
+    return {
+      phone: formattedPhone,
+      status: 'ERROR',
+      whatsappEnabled: false,
+      cost: 0,
+      fromCache: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown validation error'
+    };
+  }
+}
+
+// Bulk phone validation with robust quota enforcement - atomic operation
+async function validatePhonesBulk(phones: string[], userId: string, userRole: string, campaignId?: string): Promise<{
+  validations: Array<{
+    phone: string;
+    status: string;
+    whatsappEnabled: boolean;
+    cost: number;
+    fromCache: boolean;
+  }>;
+  totalCost: number;
+  summary: {
+    total: number;
+    valid_whatsapp: number;
+    valid_no_whatsapp: number;
+    invalid: number;
+    blacklisted: number;
+    errors: number;
+    fromCache: number;
+  };
+  quotaInfo: {
+    remaining: number;
+    limit: number;
+    canValidate: boolean;
+  };
+  skipped: number;
+}> {
+  // Generate unique batch ID for tracking
+  const batchId = `batch_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  // Check daily limits BEFORE processing
+  const { canValidate, remaining, limit } = await checkDailyValidationLimit(userId, userRole);
+  
+  if (!canValidate) {
+    throw new Error(`Daily validation limit exceeded. You have 0 validations remaining today.`);
+  }
+
+  if (phones.length === 0) {
+    throw new Error('No phone numbers provided for validation.');
+  }
+
+  // Pre-compute potential API costs to avoid quota overruns
+  const estimatedApiCalls = await estimateBulkApiCalls(phones, userId);
+  
+  // Hard limit: only process what fits within remaining quota
+  let allowedCount = remaining;
+  if (estimatedApiCalls > remaining) {
+    console.warn(`Bulk validation limited: ${estimatedApiCalls} estimated API calls exceeds ${remaining} remaining quota`);
+    allowedCount = remaining;
+  }
+
+  const phonesToValidate = phones.slice(0, allowedCount);
+  const skippedCount = phones.length - phonesToValidate.length;
+  
+  if (phonesToValidate.length === 0) {
+    throw new Error(`Cannot process any validations: ${estimatedApiCalls} required but only ${remaining} remaining in daily quota.`);
+  }
+
+  // Process validations sequentially with real-time quota checking
+  const validations = [];
+  let currentQuotaRemaining = remaining;
+  
+  for (const phone of phonesToValidate) {
+    // Double-check quota before each potentially costly operation
+    if (currentQuotaRemaining <= 0) {
+      console.warn(`Stopping bulk validation: quota exhausted at ${validations.length}/${phonesToValidate.length} processed`);
+      break;
+    }
+
+    try {
+      const result = await validatePhoneNumber(phone, userId, userRole, false, batchId);
+      validations.push(result);
+      
+      // Update remaining quota (API calls reduce it, cache hits don't)
+      if (!result.fromCache && result.cost > 0) {
+        currentQuotaRemaining--;
+      }
+    } catch (quotaError) {
+      // If quota exceeded, stop processing but return partial results
+      console.warn(`Quota exceeded during bulk validation: ${quotaError.message}`);
+      break;
+    }
+  }
+
+  const totalCost = validations.reduce((sum, v) => sum + v.cost, 0);
+  
+  const summary = {
+    total: validations.length,
+    valid_whatsapp: validations.filter(v => v.status === 'VALID_WHATSAPP').length,
+    valid_no_whatsapp: validations.filter(v => v.status === 'VALID_NO_WHATSAPP').length,
+    invalid: validations.filter(v => v.status === 'INVALID').length,
+    blacklisted: validations.filter(v => v.status === 'BLACKLISTED').length,
+    errors: validations.filter(v => v.status === 'ERROR').length,
+    fromCache: validations.filter(v => v.fromCache).length,
+  };
+
+  // Get final quota info
+  const finalQuota = await checkDailyValidationLimit(userId, userRole);
+
+  return {
+    validations: validations.map(v => ({
+      phone: v.phone,
+      status: v.status,
+      whatsappEnabled: v.whatsappEnabled,
+      cost: v.cost,
+      fromCache: v.fromCache
+    })),
+    totalCost,
+    summary,
+    quotaInfo: finalQuota,
+    skipped: skippedCount + (phonesToValidate.length - validations.length)
+  };
+}
+
+// Estimate potential API calls for quota pre-checking
+async function estimateBulkApiCalls(phones: string[], userId: string): Promise<number> {
+  let estimatedApiCalls = 0;
+  
+  for (const phone of phones) {
+    const formattedPhone = formatBrazilianPhone(phone);
+    
+    // Check if blacklisted (free)
+    const isBlacklisted = await storage.isPhoneBlacklisted(formattedPhone);
+    if (isBlacklisted) continue;
+    
+    // Check if cached (free)
+    const cached = await storage.getCachedValidation(formattedPhone);
+    if (cached) continue;
+    
+    // Check if invalid format (free)
+    if (!isValidBrazilianPhone(phone)) continue;
+    
+    // This would require an API call (costs quota)
+    estimatedApiCalls++;
+  }
+  
+  return estimatedApiCalls;
+}
+
+// Validation with quota checking to prevent overruns
+async function validatePhoneNumberWithQuotaCheck(
+  phone: string, 
+  userId: string, 
+  forceRefresh = false, 
+  batchId?: string,
+  quotaRemaining?: number
+): Promise<{
+  phone: string;
+  status: 'VALID_WHATSAPP' | 'VALID_NO_WHATSAPP' | 'INVALID' | 'BLACKLISTED' | 'ERROR';
+  whatsappEnabled: boolean;
+  cost: number;
+  fromCache: boolean;
+  expiresAt?: Date;
+  responseData?: any;
+  errorMessage?: string;
+}> {
+  const formattedPhone = formatBrazilianPhone(phone);
+  
+  try {
+    // Check if phone is blacklisted first (free)
+    const isBlacklisted = await storage.isPhoneBlacklisted(formattedPhone);
+    if (isBlacklisted) {
+      await storage.recordValidationEvent({
+        phone: formattedPhone,
+        validationStatus: 'BLACKLISTED',
+        whatsappEnabled: false,
+        validationProvider: 'blacklist_check',
+        validationCost: "0",
+        validatedBy: userId,
+        fromCache: false,
+        batchId,
+      });
+
+      return {
+        phone: formattedPhone,
+        status: 'BLACKLISTED',
+        whatsappEnabled: false,
+        cost: 0,
+        fromCache: false,
+        errorMessage: 'Phone number is blacklisted'
+      };
+    }
+
+    // Check cache first (unless force refresh) - free
+    if (!forceRefresh) {
+      const cachedValidation = await storage.getCachedValidation(formattedPhone);
+      if (cachedValidation) {
+        await storage.recordValidationEvent({
+          phone: formattedPhone,
+          validationStatus: cachedValidation.validationStatus,
+          whatsappEnabled: cachedValidation.whatsappEnabled,
+          validationProvider: cachedValidation.validationProvider || 'cache',
+          validationCost: "0", // Cache hits are free
+          validatedBy: userId,
+          fromCache: true,
+          batchId,
+        });
+
+        return {
+          phone: formattedPhone,
+          status: cachedValidation.validationStatus as any,
+          whatsappEnabled: cachedValidation.whatsappEnabled || false,
+          cost: 0,
+          fromCache: true,
+          expiresAt: cachedValidation.expiresAt || undefined,
+          responseData: cachedValidation.responseData
+        };
+      }
+    }
+
+    // Basic format validation (free)
+    if (!isValidBrazilianPhone(phone)) {
+      const expiresAt = new Date(Date.now() + VALIDATION_CACHE_TTL);
+      
+      await storage.recordValidationEvent({
+        phone: formattedPhone,
+        validationStatus: 'INVALID',
+        whatsappEnabled: false,
+        validationProvider: 'format_only',
+        validationCost: "0",
+        errorMessage: 'Invalid phone number format',
+        validatedBy: userId,
+        fromCache: false,
+        batchId,
+      });
+
+      await storage.saveCachedValidation({
+        phone: formattedPhone,
+        validationStatus: 'INVALID',
+        whatsappEnabled: false,
+        validationProvider: 'format_only',
+        expiresAt,
+      });
+
+      return {
+        phone: formattedPhone,
+        status: 'INVALID',
+        whatsappEnabled: false,
+        cost: 0,
+        fromCache: false,
+        errorMessage: 'Invalid phone number format'
+      };
+    }
+
+    // CHECK QUOTA before making costly API call
+    if (quotaRemaining !== undefined && quotaRemaining <= 0) {
+      throw new Error(`Quota exceeded: ${quotaRemaining} validations remaining`);
+    }
+
+    // Call WhatsApp API validation (COSTS QUOTA)
+    const apiResult = await validatePhoneWithWhatsAppAPI(formattedPhone);
+    const expiresAt = new Date(Date.now() + VALIDATION_CACHE_TTL);
+
+    // Record API call as validation event (PAID - counts toward quota)
+    await storage.recordValidationEvent({
+      phone: formattedPhone,
+      validationStatus: apiResult.status,
+      whatsappEnabled: apiResult.whatsappEnabled,
+      validationProvider: apiResult.provider,
+      validationCost: apiResult.cost.toString(),
+      responseData: apiResult.responseData,
+      validatedBy: userId,
+      fromCache: false,
+      batchId,
+    });
+
+    // Save to cache for future performance
+    await storage.saveCachedValidation({
+      phone: formattedPhone,
+      validationStatus: apiResult.status,
+      whatsappEnabled: apiResult.whatsappEnabled,
+      validationProvider: apiResult.provider,
+      responseData: apiResult.responseData,
+      expiresAt,
+    });
+
+    return {
+      phone: formattedPhone,
+      status: apiResult.status,
+      whatsappEnabled: apiResult.whatsappEnabled,
+      cost: apiResult.cost,
+      fromCache: false,
+      expiresAt,
+      responseData: apiResult.responseData
+    };
+
+  } catch (error) {
+    console.error('Error validating phone number:', error);
+    
+    // Record error as validation event
+    await storage.recordValidationEvent({
+      phone: formattedPhone,
+      validationStatus: 'ERROR',
+      whatsappEnabled: false,
+      validationProvider: 'error',
+      validationCost: "0",
+      errorMessage: error instanceof Error ? error.message : 'Unknown validation error',
+      validatedBy: userId,
+      fromCache: false,
+      batchId,
+    });
+
+    return {
+      phone: formattedPhone,
+      status: 'ERROR',
+      whatsappEnabled: false,
+      cost: 0,
+      fromCache: false,
+      errorMessage: error instanceof Error ? error.message : 'Unknown validation error'
+    };
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -1167,6 +1735,145 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error fetching campaign logs:", error);
       res.status(500).json({ message: "Failed to fetch logs" });
+    }
+  });
+
+  // WhatsApp Phone Validation routes
+  app.get('/api/whatsapp/validation-limits', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const userRole = req.user?.claims?.role || 'VENDEDOR';
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const limits = await checkDailyValidationLimit(userId, userRole);
+      
+      // Get cost information for today
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const tomorrow = new Date(today);
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      
+      const costStats = await storage.getValidationCostsByUser(userId, today, tomorrow);
+      
+      res.json({
+        ...limits,
+        todayCost: costStats.totalCost,
+        costLimits: VALIDATION_COSTS,
+        userRole
+      });
+    } catch (error) {
+      console.error("Error fetching validation limits:", error);
+      res.status(500).json({ message: "Failed to fetch validation limits" });
+    }
+  });
+
+  app.post('/api/whatsapp/validate-phone', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const userRole = req.user?.claims?.role || 'VENDEDOR';
+      const { phone, forceRefresh = false } = req.body;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      if (!phone) {
+        return res.status(400).json({ message: "Phone number is required" });
+      }
+
+      // Check daily limits
+      const limits = await checkDailyValidationLimit(userId, userRole);
+      if (!limits.canValidate && !forceRefresh) {
+        return res.status(429).json({ 
+          message: "Daily validation limit exceeded",
+          ...limits
+        });
+      }
+
+      const result = await validatePhoneNumberWithQuotaCheck(phone, userId, forceRefresh, undefined, limits.remaining);
+      res.json(result);
+    } catch (error) {
+      console.error("Error validating phone:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to validate phone" 
+      });
+    }
+  });
+
+  app.post('/api/whatsapp/validate-bulk', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const userRole = req.user?.claims?.role || 'VENDEDOR';
+      const { phones } = req.body;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      if (!Array.isArray(phones) || phones.length === 0) {
+        return res.status(400).json({ message: "Phones array is required and cannot be empty" });
+      }
+
+      if (phones.length > 1000) {
+        return res.status(400).json({ message: "Maximum 1000 phones per batch" });
+      }
+
+      const result = await validatePhonesBulk(phones, userId, userRole);
+      res.json(result);
+    } catch (error) {
+      console.error("Error bulk validating phones:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to validate phones" 
+      });
+    }
+  });
+
+  app.get('/api/whatsapp/validation-history', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const { startDate, endDate } = req.query;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+
+      const start = startDate ? new Date(startDate as string) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000); // Default: last 30 days
+      const end = endDate ? new Date(endDate as string) : new Date();
+
+      const validations = await storage.getValidationsByDateRange(start, end);
+      const costStats = await storage.getValidationCostsByUser(userId, start, end);
+      
+      res.json({
+        validations,
+        summary: costStats,
+        dateRange: { start, end }
+      });
+    } catch (error) {
+      console.error("Error fetching validation history:", error);
+      res.status(500).json({ message: "Failed to fetch validation history" });
+    }
+  });
+
+  app.post('/api/whatsapp/clear-expired-cache', isAuthenticated, async (req: any, res) => {
+    try {
+      const userRole = req.user?.claims?.role || 'VENDEDOR';
+      
+      // Only allow admins to clear cache
+      if (!['ADMIN', 'SUPER_ADMIN'].includes(userRole)) {
+        return res.status(403).json({ message: "Insufficient permissions" });
+      }
+
+      const cleared = await storage.clearExpiredValidations();
+      res.json({ 
+        message: `Cleared ${cleared} expired validation entries`,
+        cleared
+      });
+    } catch (error) {
+      console.error("Error clearing expired cache:", error);
+      res.status(500).json({ message: "Failed to clear expired cache" });
     }
   });
 

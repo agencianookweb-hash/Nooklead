@@ -13,6 +13,8 @@ import {
   massCampaigns,
   campaignContacts,
   phoneBlacklist,
+  phoneValidations,
+  phoneValidationCache,
   listValidations,
   campaignLogs,
   type User,
@@ -25,6 +27,8 @@ import {
   type MassCampaign,
   type CampaignContact,
   type PhoneBlacklist,
+  type PhoneValidation,
+  type PhoneValidationCache,
   type ListValidation,
   type CampaignLog,
   type InsertCompany,
@@ -35,6 +39,8 @@ import {
   type InsertMassCampaign,
   type InsertCampaignContact,
   type InsertPhoneBlacklist,
+  type InsertPhoneValidation,
+  type InsertPhoneValidationCache,
   type InsertListValidation,
   type InsertCampaignLog,
 } from "@shared/schema";
@@ -134,6 +140,17 @@ export interface IStorage {
   addToBlacklist(blacklistEntry: InsertPhoneBlacklist): Promise<PhoneBlacklist>;
   removeFromBlacklist(id: string): Promise<void>;
   getBlacklistByCategory(category: string): Promise<PhoneBlacklist[]>;
+
+  // Phone Validation operations - tracks each validation event for quota/cost tracking  
+  recordValidationEvent(validation: InsertPhoneValidation): Promise<PhoneValidation>;
+  bulkRecordValidationEvents(validations: InsertPhoneValidation[]): Promise<void>;
+  getValidationsByDateRange(startDate: Date, endDate: Date): Promise<PhoneValidation[]>;
+  getValidationCostsByUser(userId: string, startDate: Date, endDate: Date): Promise<{ totalCost: number; totalValidations: number }>;
+  
+  // Phone Validation Cache operations - stores latest result per phone for performance
+  getCachedValidation(phone: string): Promise<PhoneValidationCache | null>;
+  saveCachedValidation(validation: InsertPhoneValidationCache): Promise<PhoneValidationCache>;
+  clearExpiredCache(): Promise<number>;
 
   // List Validation operations
   getListValidations(campaignId: string): Promise<ListValidation[]>;
@@ -655,6 +672,105 @@ export class DatabaseStorage implements IStorage {
       .from(phoneBlacklist)
       .where(eq(phoneBlacklist.category, category))
       .orderBy(desc(phoneBlacklist.createdAt));
+  }
+
+  // Phone Validation Event Tracking - records each validation for quota/cost counting
+  async recordValidationEvent(validation: InsertPhoneValidation): Promise<PhoneValidation> {
+    const [newValidation] = await db
+      .insert(phoneValidations)
+      .values(validation) // Always insert new record - no conflict handling
+      .returning();
+    return newValidation;
+  }
+
+  async bulkRecordValidationEvents(validations: InsertPhoneValidation[]): Promise<void> {
+    if (validations.length === 0) return;
+    
+    // Process in batches to avoid parameter limits - each validation is a separate event
+    const batchSize = 500;
+    for (let i = 0; i < validations.length; i += batchSize) {
+      const batch = validations.slice(i, i + batchSize);
+      await db.insert(phoneValidations).values(batch); // Insert all events
+    }
+  }
+
+  async getValidationsByDateRange(startDate: Date, endDate: Date): Promise<PhoneValidation[]> {
+    return await db
+      .select()
+      .from(phoneValidations)
+      .where(
+        and(
+          sql`${phoneValidations.createdAt} >= ${startDate}`,
+          sql`${phoneValidations.createdAt} <= ${endDate}`
+        )
+      )
+      .orderBy(desc(phoneValidations.createdAt));
+  }
+
+  async getValidationCostsByUser(userId: string, startDate: Date, endDate: Date): Promise<{ totalCost: number; totalValidations: number }> {
+    const [result] = await db
+      .select({
+        totalCost: sum(phoneValidations.validationCost),
+        totalValidations: count(phoneValidations.id), // Count ALL events, not unique phones
+      })
+      .from(phoneValidations)
+      .where(
+        and(
+          eq(phoneValidations.validatedBy, userId),
+          sql`${phoneValidations.createdAt} >= ${startDate}`,
+          sql`${phoneValidations.createdAt} <= ${endDate}`
+        )
+      );
+    
+    return {
+      totalCost: parseFloat(result?.totalCost || "0"),
+      totalValidations: result?.totalValidations || 0,
+    };
+  }
+
+  // Phone Validation Cache - for performance optimization
+  async getCachedValidation(phone: string): Promise<PhoneValidationCache | null> {
+    const [cached] = await db
+      .select()
+      .from(phoneValidationCache)
+      .where(eq(phoneValidationCache.phone, phone))
+      .limit(1);
+    
+    // Check if cache is expired
+    if (cached && cached.expiresAt && new Date() > cached.expiresAt) {
+      // Delete expired cache entry
+      await db.delete(phoneValidationCache).where(eq(phoneValidationCache.phone, phone));
+      return null;
+    }
+    
+    return cached || null;
+  }
+
+  async saveCachedValidation(validation: InsertPhoneValidationCache): Promise<PhoneValidationCache> {
+    const [cached] = await db
+      .insert(phoneValidationCache)
+      .values({
+        ...validation,
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: phoneValidationCache.phone,
+        set: {
+          ...validation,
+          updatedAt: new Date(),
+        }
+      })
+      .returning();
+    return cached;
+  }
+
+  async clearExpiredCache(): Promise<number> {
+    const result = await db
+      .delete(phoneValidationCache)
+      .where(sql`${phoneValidationCache.expiresAt} < NOW()`)
+      .returning({ id: phoneValidationCache.id });
+    
+    return result.length;
   }
 
   // List Validation operations

@@ -326,6 +326,45 @@ export const campaignLogs = pgTable("campaign_logs", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Histórico de Validações de Números WhatsApp (cada validação = 1 registro)
+export const phoneValidations = pgTable("phone_validations", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  phone: varchar("phone").notNull(), // Removed unique constraint - track each validation event
+  validationStatus: text("validation_status", { 
+    enum: ["VALID_WHATSAPP", "VALID_NO_WHATSAPP", "INVALID", "BLACKLISTED", "ERROR"] 
+  }).notNull(),
+  whatsappEnabled: boolean("whatsapp_enabled").default(false),
+  
+  // Metadados da validação
+  validationProvider: varchar("validation_provider"), // 'whatsapp_api', 'maytapi', 'format_only'
+  validationCost: decimal("validation_cost", { precision: 10, scale: 4 }).default("0"),
+  responseData: jsonb("response_data"), // Dados brutos da resposta da API
+  errorMessage: text("error_message"),
+  
+  // Rastreamento de validação individual
+  validatedBy: varchar("validated_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  fromCache: boolean("from_cache").default(false), // Se foi resultado do cache ou API call
+  campaignId: varchar("campaign_id"), // Opcional: link to campaign if bulk validation
+  batchId: varchar("batch_id"), // Opcional: group bulk validations
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Cache separado para resultados recentes (otimização de performance)
+export const phoneValidationCache = pgTable("phone_validation_cache", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  phone: varchar("phone").unique().notNull(),
+  validationStatus: text("validation_status", { 
+    enum: ["VALID_WHATSAPP", "VALID_NO_WHATSAPP", "INVALID", "BLACKLISTED", "ERROR"] 
+  }).notNull(),
+  whatsappEnabled: boolean("whatsapp_enabled").default(false),
+  validationProvider: varchar("validation_provider"),
+  responseData: jsonb("response_data"),
+  expiresAt: timestamp("expires_at"), // Cache expiration
+  lastValidatedAt: timestamp("last_validated_at").defaultNow(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
@@ -338,6 +377,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   campaigns: many(campaigns),
   massCampaigns: many(massCampaigns),
   phoneBlacklist: many(phoneBlacklist),
+  phoneValidations: many(phoneValidations),
   rankings: many(rankings),
   goals: many(goals),
   achievements: many(achievements),
@@ -416,6 +456,14 @@ export const campaignLogsRelations = relations(campaignLogs, ({ one }) => ({
   contact: one(campaignContacts, { fields: [campaignLogs.contactId], references: [campaignContacts.id] }),
 }));
 
+export const phoneValidationsRelations = relations(phoneValidations, ({ one }) => ({
+  validatedByUser: one(users, { fields: [phoneValidations.validatedBy], references: [users.id] }),
+}));
+
+export const phoneValidationCacheRelations = relations(phoneValidationCache, ({ one }) => ({
+  // No direct user relation for cache table
+}));
+
 // Schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -480,6 +528,17 @@ export const insertCampaignLogSchema = createInsertSchema(campaignLogs).omit({
   timestamp: true,
 });
 
+export const insertPhoneValidationSchema = createInsertSchema(phoneValidations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPhoneValidationCacheSchema = createInsertSchema(phoneValidationCache).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -506,9 +565,13 @@ export type CampaignContact = typeof campaignContacts.$inferSelect;
 export type PhoneBlacklist = typeof phoneBlacklist.$inferSelect;
 export type ListValidation = typeof listValidations.$inferSelect;
 export type CampaignLog = typeof campaignLogs.$inferSelect;
+export type PhoneValidation = typeof phoneValidations.$inferSelect;
+export type PhoneValidationCache = typeof phoneValidationCache.$inferSelect;
 
 export type InsertMassCampaign = z.infer<typeof insertMassCampaignSchema>;
 export type InsertCampaignContact = z.infer<typeof insertCampaignContactSchema>;
 export type InsertPhoneBlacklist = z.infer<typeof insertPhoneBlacklistSchema>;
 export type InsertListValidation = z.infer<typeof insertListValidationSchema>;
 export type InsertCampaignLog = z.infer<typeof insertCampaignLogSchema>;
+export type InsertPhoneValidation = z.infer<typeof insertPhoneValidationSchema>;
+export type InsertPhoneValidationCache = z.infer<typeof insertPhoneValidationCacheSchema>;
