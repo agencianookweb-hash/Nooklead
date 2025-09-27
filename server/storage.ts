@@ -10,6 +10,11 @@ import {
   achievements,
   notifications,
   teams,
+  massCampaigns,
+  campaignContacts,
+  phoneBlacklist,
+  listValidations,
+  campaignLogs,
   type User,
   type UpsertUser,
   type Company,
@@ -17,11 +22,21 @@ import {
   type Sale,
   type Campaign,
   type Interaction,
+  type MassCampaign,
+  type CampaignContact,
+  type PhoneBlacklist,
+  type ListValidation,
+  type CampaignLog,
   type InsertCompany,
   type InsertLead,
   type InsertSale,
   type InsertCampaign,
   type InsertInteraction,
+  type InsertMassCampaign,
+  type InsertCampaignContact,
+  type InsertPhoneBlacklist,
+  type InsertListValidation,
+  type InsertCampaignLog,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, ilike, count, sql, sum } from "drizzle-orm";
@@ -97,6 +112,37 @@ export interface IStorage {
     teamSize: number;
     description?: string;
   }): Promise<{ company: Company; user: User }>;
+
+  // Mass Campaign operations
+  getMassCampaigns(userId?: string): Promise<MassCampaign[]>;
+  getMassCampaignById(id: string): Promise<MassCampaign | undefined>;
+  createMassCampaign(campaign: InsertMassCampaign): Promise<MassCampaign>;
+  updateMassCampaign(id: string, updates: Partial<MassCampaign>): Promise<MassCampaign>;
+  deleteMassCampaign(id: string): Promise<void>;
+
+  // Campaign Contacts operations
+  getCampaignContacts(campaignId: string): Promise<CampaignContact[]>;
+  createCampaignContact(contact: InsertCampaignContact): Promise<CampaignContact>;
+  createCampaignContactsBulk(contacts: InsertCampaignContact[]): Promise<CampaignContact[]>;
+  updateCampaignContact(id: string, updates: Partial<CampaignContact>): Promise<CampaignContact>;
+  getCampaignContactsByValidationStatus(campaignId: string, status: string): Promise<CampaignContact[]>;
+
+  // Phone Blacklist operations
+  getBlacklistedPhones(): Promise<PhoneBlacklist[]>;
+  isPhoneBlacklisted(phone: string): Promise<boolean>;
+  addToBlacklist(blacklistEntry: InsertPhoneBlacklist): Promise<PhoneBlacklist>;
+  removeFromBlacklist(id: string): Promise<void>;
+  getBlacklistByCategory(category: string): Promise<PhoneBlacklist[]>;
+
+  // List Validation operations
+  getListValidations(campaignId: string): Promise<ListValidation[]>;
+  createListValidation(validation: InsertListValidation): Promise<ListValidation>;
+  updateListValidation(id: string, updates: Partial<ListValidation>): Promise<ListValidation>;
+
+  // Campaign Logs operations
+  getCampaignLogs(campaignId: string): Promise<CampaignLog[]>;
+  createCampaignLog(log: InsertCampaignLog): Promise<CampaignLog>;
+  getCampaignLogsByContact(contactId: string): Promise<CampaignLog[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -484,6 +530,164 @@ export class DatabaseStorage implements IStorage {
       .returning();
 
     return { company, user };
+  }
+
+  // Mass Campaign operations
+  async getMassCampaigns(userId?: string): Promise<MassCampaign[]> {
+    let query = db.select().from(massCampaigns).orderBy(desc(massCampaigns.createdAt));
+    
+    if (userId) {
+      query = query.where(eq(massCampaigns.userId, userId));
+    }
+    
+    return await query;
+  }
+
+  async getMassCampaignById(id: string): Promise<MassCampaign | undefined> {
+    const [campaign] = await db.select().from(massCampaigns).where(eq(massCampaigns.id, id));
+    return campaign;
+  }
+
+  async createMassCampaign(campaign: InsertMassCampaign): Promise<MassCampaign> {
+    const [newCampaign] = await db.insert(massCampaigns).values(campaign).returning();
+    return newCampaign;
+  }
+
+  async updateMassCampaign(id: string, updates: Partial<MassCampaign>): Promise<MassCampaign> {
+    const [updatedCampaign] = await db
+      .update(massCampaigns)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(massCampaigns.id, id))
+      .returning();
+    return updatedCampaign;
+  }
+
+  async deleteMassCampaign(id: string): Promise<void> {
+    await db.delete(massCampaigns).where(eq(massCampaigns.id, id));
+  }
+
+  // Campaign Contacts operations
+  async getCampaignContacts(campaignId: string): Promise<CampaignContact[]> {
+    return await db
+      .select()
+      .from(campaignContacts)
+      .where(eq(campaignContacts.campaignId, campaignId))
+      .orderBy(desc(campaignContacts.createdAt));
+  }
+
+  async createCampaignContact(contact: InsertCampaignContact): Promise<CampaignContact> {
+    const [newContact] = await db.insert(campaignContacts).values(contact).returning();
+    return newContact;
+  }
+
+  async createCampaignContactsBulk(contacts: InsertCampaignContact[]): Promise<CampaignContact[]> {
+    const batchSize = 500; // Process in batches to avoid PostgreSQL parameter limits
+    const results: CampaignContact[] = [];
+    
+    // Process contacts in batches within a transaction
+    await db.transaction(async (tx) => {
+      for (let i = 0; i < contacts.length; i += batchSize) {
+        const batch = contacts.slice(i, i + batchSize);
+        const batchResults = await tx.insert(campaignContacts).values(batch).returning();
+        results.push(...batchResults);
+      }
+    });
+    
+    return results;
+  }
+
+  async updateCampaignContact(id: string, updates: Partial<CampaignContact>): Promise<CampaignContact> {
+    const [updatedContact] = await db
+      .update(campaignContacts)
+      .set(updates)
+      .where(eq(campaignContacts.id, id))
+      .returning();
+    return updatedContact;
+  }
+
+  async getCampaignContactsByValidationStatus(campaignId: string, status: string): Promise<CampaignContact[]> {
+    return await db
+      .select()
+      .from(campaignContacts)
+      .where(and(
+        eq(campaignContacts.campaignId, campaignId),
+        eq(campaignContacts.phoneValidationStatus, status)
+      ));
+  }
+
+  // Phone Blacklist operations
+  async getBlacklistedPhones(): Promise<PhoneBlacklist[]> {
+    return await db.select().from(phoneBlacklist).orderBy(desc(phoneBlacklist.createdAt));
+  }
+
+  async isPhoneBlacklisted(phone: string): Promise<boolean> {
+    const [result] = await db
+      .select({ count: count() })
+      .from(phoneBlacklist)
+      .where(eq(phoneBlacklist.phone, phone));
+    return (result?.count || 0) > 0;
+  }
+
+  async addToBlacklist(blacklistEntry: InsertPhoneBlacklist): Promise<PhoneBlacklist> {
+    const [newEntry] = await db.insert(phoneBlacklist).values(blacklistEntry).returning();
+    return newEntry;
+  }
+
+  async removeFromBlacklist(id: string): Promise<void> {
+    await db.delete(phoneBlacklist).where(eq(phoneBlacklist.id, id));
+  }
+
+  async getBlacklistByCategory(category: string): Promise<PhoneBlacklist[]> {
+    return await db
+      .select()
+      .from(phoneBlacklist)
+      .where(eq(phoneBlacklist.category, category))
+      .orderBy(desc(phoneBlacklist.createdAt));
+  }
+
+  // List Validation operations
+  async getListValidations(campaignId: string): Promise<ListValidation[]> {
+    return await db
+      .select()
+      .from(listValidations)
+      .where(eq(listValidations.campaignId, campaignId))
+      .orderBy(desc(listValidations.createdAt));
+  }
+
+  async createListValidation(validation: InsertListValidation): Promise<ListValidation> {
+    const [newValidation] = await db.insert(listValidations).values(validation).returning();
+    return newValidation;
+  }
+
+  async updateListValidation(id: string, updates: Partial<ListValidation>): Promise<ListValidation> {
+    const [updatedValidation] = await db
+      .update(listValidations)
+      .set(updates)
+      .where(eq(listValidations.id, id))
+      .returning();
+    return updatedValidation;
+  }
+
+  // Campaign Logs operations
+  async getCampaignLogs(campaignId: string): Promise<CampaignLog[]> {
+    return await db
+      .select()
+      .from(campaignLogs)
+      .where(eq(campaignLogs.campaignId, campaignId))
+      .orderBy(desc(campaignLogs.timestamp));
+  }
+
+  async createCampaignLog(log: InsertCampaignLog): Promise<CampaignLog> {
+    const [newLog] = await db.insert(campaignLogs).values(log).returning();
+    return newLog;
+  }
+
+  async getCampaignLogsByContact(contactId: string): Promise<CampaignLog[]> {
+    return await db
+      .select()
+      .from(campaignLogs)
+      .where(eq(campaignLogs.contactId, contactId))
+      .orderBy(desc(campaignLogs.timestamp));
   }
 }
 
