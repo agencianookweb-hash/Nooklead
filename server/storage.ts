@@ -151,6 +151,7 @@ export interface IStorage {
   getCachedValidation(phone: string): Promise<PhoneValidationCache | null>;
   saveCachedValidation(validation: InsertPhoneValidationCache): Promise<PhoneValidationCache>;
   clearExpiredCache(): Promise<number>;
+  clearExpiredValidations(): Promise<number>;
 
   // List Validation operations
   getListValidations(campaignId: string): Promise<ListValidation[]>;
@@ -227,13 +228,13 @@ export class DatabaseStorage implements IStorage {
 
   // Lead operations
   async getLeads(userId?: string): Promise<Lead[]> {
-    let query = db.select().from(leads).orderBy(desc(leads.createdAt));
-    
     if (userId) {
-      query = query.where(eq(leads.userId, userId));
+      return await db.select().from(leads)
+        .where(eq(leads.userId, userId))
+        .orderBy(desc(leads.createdAt));
     }
     
-    return await query;
+    return await db.select().from(leads).orderBy(desc(leads.createdAt));
   }
 
   async getLeadsByStatus(status: string): Promise<Lead[]> {
@@ -261,13 +262,13 @@ export class DatabaseStorage implements IStorage {
 
   // Sales operations
   async getSales(userId?: string): Promise<Sale[]> {
-    let query = db.select().from(sales).orderBy(desc(sales.createdAt));
-    
     if (userId) {
-      query = query.where(eq(sales.userId, userId));
+      return await db.select().from(sales)
+        .where(eq(sales.userId, userId))
+        .orderBy(desc(sales.createdAt));
     }
     
-    return await query;
+    return await db.select().from(sales).orderBy(desc(sales.createdAt));
   }
 
   async getPendingSales(): Promise<Sale[]> {
@@ -294,13 +295,13 @@ export class DatabaseStorage implements IStorage {
 
   // Campaign operations
   async getCampaigns(userId?: string): Promise<Campaign[]> {
-    let query = db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
-    
     if (userId) {
-      query = query.where(eq(campaigns.userId, userId));
+      return await db.select().from(campaigns)
+        .where(eq(campaigns.userId, userId))
+        .orderBy(desc(campaigns.createdAt));
     }
     
-    return await query;
+    return await db.select().from(campaigns).orderBy(desc(campaigns.createdAt));
   }
 
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
@@ -552,13 +553,13 @@ export class DatabaseStorage implements IStorage {
 
   // Mass Campaign operations
   async getMassCampaigns(userId?: string): Promise<MassCampaign[]> {
-    let query = db.select().from(massCampaigns).orderBy(desc(massCampaigns.createdAt));
-    
     if (userId) {
-      query = query.where(eq(massCampaigns.userId, userId));
+      return await db.select().from(massCampaigns)
+        .where(eq(massCampaigns.userId, userId))
+        .orderBy(desc(massCampaigns.createdAt));
     }
     
-    return await query;
+    return await db.select().from(massCampaigns).orderBy(desc(massCampaigns.createdAt));
   }
 
   async getMassCampaignById(id: string): Promise<MassCampaign | undefined> {
@@ -771,6 +772,11 @@ export class DatabaseStorage implements IStorage {
       .returning({ id: phoneValidationCache.id });
     
     return result.length;
+  }
+
+  async clearExpiredValidations(): Promise<number> {
+    // Clear expired cache entries (alias for clearExpiredCache for backward compatibility)
+    return await this.clearExpiredCache();
   }
 
   // List Validation operations

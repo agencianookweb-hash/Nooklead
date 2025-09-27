@@ -368,8 +368,12 @@ async function processContactsList(contacts: any[], campaignId: string, userId?:
       try {
         for (const entry of autoDetectedBlacklist) {
           await storage.addToBlacklist({
-            ...entry,
-            addedBy: userId, // User who uploaded the file
+            phone: entry.phone,
+            category: entry.category as "CONTABILIDADE" | "PUBLICO" | "SAUDE" | "CALLCENTER" | "EDUCACAO" | "FINANCEIRO" | "RELIGIOSO" | "OPTOUT",
+            addedBy: userId,
+            reason: entry.reason,
+            companyName: entry.companyName,
+            autoDetected: entry.autoDetected,
           });
         }
       } catch (error) {
@@ -697,9 +701,9 @@ async function validatePhonesBulk(phones: string[], userId: string, userRole: st
       if (!result.fromCache && result.cost > 0) {
         currentQuotaRemaining--;
       }
-    } catch (quotaError) {
+    } catch (quotaError: any) {
       // If quota exceeded, stop processing but return partial results
-      console.warn(`Quota exceeded during bulk validation: ${quotaError.message}`);
+      console.warn(`Quota exceeded during bulk validation: ${quotaError?.message || 'Unknown error'}`);
       break;
     }
   }
@@ -1186,7 +1190,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Fetch user role from database since it may not be in JWT claims
       const user = await storage.getUser(userId);
-      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      if (!user || !user.role || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
         return res.status(403).json({ message: "Not authorized to view manager dashboard" });
       }
       
@@ -1218,7 +1222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user is authorized to manage team
       const user = await storage.getUser(userId);
-      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      if (!user || !user.role || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
         return res.status(403).json({ message: "Not authorized to manage team" });
       }
       
@@ -1236,7 +1240,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user is authorized to manage team
       const user = await storage.getUser(userId);
-      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      if (!user || !user.role || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
         return res.status(403).json({ message: "Not authorized to manage team" });
       }
       
@@ -1269,7 +1273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user is authorized to manage team
       const user = await storage.getUser(userId);
-      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      if (!user || !user.role || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
         return res.status(403).json({ message: "Not authorized to manage team" });
       }
       
@@ -1289,7 +1293,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       // Check if user is authorized to manage team
       const user = await storage.getUser(userId);
-      if (!user || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
+      if (!user || !user.role || !['GESTOR', 'ADMIN', 'SUPER_ADMIN'].includes(user.role)) {
         return res.status(403).json({ message: "Not authorized to manage team" });
       }
       
@@ -1689,14 +1693,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       for (const contact of contacts) {
         const detection = detectBlacklistCategory({
-          name: contact.name || '',
+          name: contact.razaoSocial || contact.nomeFantasia || '',
         });
         
         if (detection.category) {
           detectedCategories.push({
             contactId: contact.id,
             phone: contact.phone,
-            companyName: contact.name,
+            companyName: contact.razaoSocial || contact.nomeFantasia,
             detectedCategory: detection.category,
             reason: detection.reason,
           });
@@ -1730,11 +1734,159 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/mass-campaigns/:id/logs', isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
-      const logs = await storage.getCampaignLogs(id);
-      res.json(logs);
+      const { status, search, page = 1, limit = 10 } = req.query;
+      
+      let logs = await storage.getCampaignLogs(id);
+      
+      // Apply filters
+      if (status && status !== 'ALL') {
+        logs = logs.filter(log => log.eventType === status);
+      }
+      
+      if (search) {
+        const searchTerm = search.toString().toLowerCase();
+        logs = logs.filter(log => 
+          log.message?.toLowerCase().includes(searchTerm) ||
+          log.contactId?.toLowerCase().includes(searchTerm)
+        );
+      }
+      
+      // Apply pagination
+      const offset = (Number(page) - 1) * Number(limit);
+      const paginatedLogs = logs.slice(offset, offset + Number(limit));
+      
+      res.json({
+        logs: paginatedLogs,
+        totalCount: logs.length,
+        page: Number(page),
+        limit: Number(limit),
+        totalPages: Math.ceil(logs.length / Number(limit))
+      });
     } catch (error) {
       console.error("Error fetching campaign logs:", error);
       res.status(500).json({ message: "Failed to fetch logs" });
+    }
+  });
+
+  // Campaign statistics route
+  app.get('/api/mass-campaigns/:id/stats', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      // Get campaign details
+      const campaign = await storage.getMassCampaignById(id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      // Get campaign contacts for total records
+      const contacts = await storage.getCampaignContacts(id);
+      
+      // Get logs for detailed statistics
+      const logs = await storage.getCampaignLogs(id);
+      
+      // Calculate statistics
+      const stats = {
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        channel: campaign.channel || 'WHATSAPP',
+        totalRecords: contacts.length,
+        sentCount: logs.filter(log => ['SENT', 'DELIVERED', 'READ'].includes(log.eventType || '')).length,
+        deliveredCount: logs.filter(log => ['DELIVERED', 'READ'].includes(log.eventType || '')).length,
+        readCount: logs.filter(log => log.status === 'READ').length,
+        errorCount: logs.filter(log => log.status === 'FAILED').length,
+        currentRate: campaign.sendRate || 50,
+        startedAt: campaign.startTime,
+        estimatedCompletionTime: campaign.endTime,
+        totalCost: (Number(campaign.validationCost) || 0) + (Number(campaign.sendingCost) || 0),
+        validationCost: Number(campaign.validationCost) || 0,
+        sendingCost: Number(campaign.sendingCost) || 0,
+        createdAt: campaign.createdAt,
+        updatedAt: campaign.updatedAt
+      };
+      
+      res.json(stats);
+    } catch (error) {
+      console.error("Error fetching campaign stats:", error);
+      res.status(500).json({ message: "Failed to fetch campaign statistics" });
+    }
+  });
+
+  // Campaign control routes
+  app.post('/api/mass-campaigns/:id/pause', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const campaign = await storage.getMassCampaignById(id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      if (campaign.status !== 'RUNNING') {
+        return res.status(400).json({ message: "Campaign is not running" });
+      }
+      
+      const updatedCampaign = await storage.updateMassCampaign(id, { 
+        status: 'PAUSED',
+        updatedAt: new Date() 
+      });
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      console.error("Error pausing campaign:", error);
+      res.status(500).json({ message: "Failed to pause campaign" });
+    }
+  });
+
+  app.post('/api/mass-campaigns/:id/resume', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const campaign = await storage.getMassCampaignById(id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      if (campaign.status !== 'PAUSED') {
+        return res.status(400).json({ message: "Campaign is not paused" });
+      }
+      
+      const updatedCampaign = await storage.updateMassCampaign(id, { 
+        status: 'RUNNING',
+        updatedAt: new Date() 
+      });
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      console.error("Error resuming campaign:", error);
+      res.status(500).json({ message: "Failed to resume campaign" });
+    }
+  });
+
+  app.post('/api/mass-campaigns/:id/stop', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      const campaign = await storage.getMassCampaignById(id);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      if (!['RUNNING', 'PAUSED'].includes(campaign.status || '')) {
+        return res.status(400).json({ message: "Campaign cannot be stopped" });
+      }
+      
+      const updatedCampaign = await storage.updateMassCampaign(id, { 
+        status: 'STOPPED',
+        endTime: new Date(),
+        updatedAt: new Date() 
+      });
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      console.error("Error stopping campaign:", error);
+      res.status(500).json({ message: "Failed to stop campaign" });
     }
   });
 
