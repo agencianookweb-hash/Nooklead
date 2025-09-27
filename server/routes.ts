@@ -2,8 +2,166 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
-import { insertLeadSchema, insertSaleSchema, insertCompanySchema } from "@shared/schema";
+import { insertLeadSchema, insertSaleSchema, insertCompanySchema, insertMassCampaignSchema, insertCampaignContactSchema } from "@shared/schema";
 import { z } from "zod";
+import multer from "multer";
+import csv from "csv-parser";
+import * as XLSX from "xlsx";
+import { lookup } from "mime-types";
+import { createReadStream } from "fs";
+import path from "path";
+
+// Helper functions for file processing
+async function parseCSVFile(buffer: Buffer): Promise<any[]> {
+  return new Promise((resolve, reject) => {
+    const results: any[] = [];
+    const stream = require('stream');
+    const bufferStream = new stream.PassThrough();
+    bufferStream.end(buffer);
+    
+    bufferStream
+      .pipe(csv({
+        headers: ['name', 'phone', 'email', 'company'], // Expected CSV headers
+      }))
+      .on('data', (data: any) => {
+        if (data.phone && data.phone.trim()) {
+          results.push({
+            name: data.name?.trim() || '',
+            phone: data.phone.trim(),
+            email: data.email?.trim() || '',
+            company: data.company?.trim() || '',
+          });
+        }
+      })
+      .on('end', () => resolve(results))
+      .on('error', reject);
+  });
+}
+
+async function parseXLSXFile(buffer: Buffer): Promise<any[]> {
+  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const sheetName = workbook.SheetNames[0];
+  const worksheet = workbook.Sheets[sheetName];
+  
+  const jsonData = XLSX.utils.sheet_to_json(worksheet, {
+    header: ['name', 'phone', 'email', 'company'],
+    range: 1, // Skip header row
+  });
+  
+  return jsonData
+    .filter((row: any) => row.phone && row.phone.toString().trim())
+    .map((row: any) => ({
+      name: row.name?.toString().trim() || '',
+      phone: row.phone.toString().trim(),
+      email: row.email?.toString().trim() || '',
+      company: row.company?.toString().trim() || '',
+    }));
+}
+
+async function parseTXTFile(buffer: Buffer): Promise<any[]> {
+  const content = buffer.toString('utf-8');
+  const lines = content.split('\n').filter(line => line.trim());
+  
+  return lines.map(line => {
+    const parts = line.split(',').map(part => part.trim());
+    return {
+      name: parts[0] || '',
+      phone: parts[1] || '',
+      email: parts[2] || '',
+      company: parts[3] || '',
+    };
+  }).filter(contact => contact.phone);
+}
+
+// Phone number validation helper
+function isValidBrazilianPhone(phone: string): boolean {
+  // Remove all non-numeric characters
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  // Brazilian phone formats:
+  // Mobile: 11 digits (with area code) - (XX) 9XXXX-XXXX
+  // Landline: 10 digits (with area code) - (XX) XXXX-XXXX
+  return cleanPhone.length === 10 || cleanPhone.length === 11;
+}
+
+// Format phone number to standard format
+function formatBrazilianPhone(phone: string): string {
+  const cleanPhone = phone.replace(/\D/g, '');
+  
+  if (cleanPhone.length === 11) {
+    // Mobile format: +55 (XX) 9XXXX-XXXX
+    return `+55${cleanPhone}`;
+  } else if (cleanPhone.length === 10) {
+    // Landline format: +55 (XX) XXXX-XXXX  
+    return `+55${cleanPhone}`;
+  }
+  
+  return phone; // Return original if can't format
+}
+
+// Process contacts list with validation and blacklist checking
+async function processContactsList(contacts: any[], campaignId: string): Promise<{
+  validContacts: any[];
+  invalidContacts: any[];
+  duplicates: any[];
+  blacklisted: any[];
+}> {
+  const validContacts: any[] = [];
+  const invalidContacts: any[] = [];
+  const duplicates: any[] = [];
+  const blacklisted: any[] = [];
+  const phoneSet = new Set<string>();
+  
+  // First pass: validate and format all phone numbers
+  const validFormattedContacts: Array<{
+    contact: any;
+    formattedPhone: string;
+  }> = [];
+  
+  for (const contact of contacts) {
+    const { name, phone, email, company } = contact;
+    
+    // Validate phone number
+    if (!isValidBrazilianPhone(phone)) {
+      invalidContacts.push({ ...contact, reason: 'Número de telefone inválido' });
+      continue;
+    }
+    
+    const formattedPhone = formatBrazilianPhone(phone);
+    
+    // Check for duplicates within the file
+    if (phoneSet.has(formattedPhone)) {
+      duplicates.push({ ...contact, reason: 'Número duplicado no arquivo' });
+      continue;
+    }
+    
+    phoneSet.add(formattedPhone);
+    validFormattedContacts.push({ contact, formattedPhone });
+  }
+  
+  // Bulk blacklist check for all unique formatted phones
+  const uniquePhones = Array.from(phoneSet);
+  const blacklistedPhonesSet = await storage.arePhonesBulkBlacklisted(uniquePhones);
+  
+  // Second pass: separate blacklisted from valid contacts
+  for (const { contact, formattedPhone } of validFormattedContacts) {
+    if (blacklistedPhonesSet.has(formattedPhone)) {
+      blacklisted.push({ ...contact, reason: 'Número na blacklist' });
+    } else {
+      validContacts.push({
+        campaignId,
+        name: contact.name || 'Sem nome',
+        phone: formattedPhone,
+        email: contact.email || null,
+        company: contact.company || null,
+        phoneValidationStatus: 'PENDING',
+        messageStatus: 'PENDING',
+      });
+    }
+  }
+  
+  return { validContacts, invalidContacts, duplicates, blacklisted };
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   // Auth middleware
@@ -370,6 +528,291 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error deactivating team member:", error);
       res.status(500).json({ message: "Failed to deactivate team member" });
+    }
+  });
+
+  // Configure multer for file uploads
+  const storage_config = multer.memoryStorage();
+  const upload = multer({ 
+    storage: storage_config,
+    limits: {
+      fileSize: 10 * 1024 * 1024, // 10MB limit
+    },
+    fileFilter: (req, file, cb) => {
+      const allowedTypes = ['text/csv', 'application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'text/plain'];
+      const fileType = lookup(file.originalname) || file.mimetype;
+      
+      if (allowedTypes.includes(fileType) || file.originalname.endsWith('.csv') || file.originalname.endsWith('.xlsx') || file.originalname.endsWith('.txt')) {
+        cb(null, true);
+      } else {
+        cb(new Error('Tipo de arquivo não suportado. Use CSV, XLSX ou TXT.'));
+      }
+    }
+  });
+
+  // Mass Campaign routes
+  app.get('/api/mass-campaigns', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      const userRole = req.user?.claims?.role || 'VENDEDOR';
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      // Vendedores only see their own campaigns, others see all
+      const campaigns = userRole === 'VENDEDOR' 
+        ? await storage.getMassCampaigns(userId)
+        : await storage.getMassCampaigns();
+        
+      res.json(campaigns);
+    } catch (error) {
+      console.error("Error fetching mass campaigns:", error);
+      res.status(500).json({ message: "Failed to fetch campaigns" });
+    }
+  });
+
+  app.get('/api/mass-campaigns/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const campaign = await storage.getMassCampaignById(id);
+      
+      if (!campaign) {
+        return res.status(404).json({ message: "Campaign not found" });
+      }
+      
+      res.json(campaign);
+    } catch (error) {
+      console.error("Error fetching mass campaign:", error);
+      res.status(500).json({ message: "Failed to fetch campaign" });
+    }
+  });
+
+  app.post('/api/mass-campaigns', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      const validatedData = insertMassCampaignSchema.parse({
+        ...req.body,
+        userId,
+      });
+      
+      const campaign = await storage.createMassCampaign(validatedData);
+      res.status(201).json(campaign);
+    } catch (error) {
+      console.error("Error creating mass campaign:", error);
+      res.status(500).json({ message: "Failed to create campaign" });
+    }
+  });
+
+  app.patch('/api/mass-campaigns/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      
+      const campaign = await storage.updateMassCampaign(id, updates);
+      res.json(campaign);
+    } catch (error) {
+      console.error("Error updating mass campaign:", error);
+      res.status(500).json({ message: "Failed to update campaign" });
+    }
+  });
+
+  app.delete('/api/mass-campaigns/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.deleteMassCampaign(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting mass campaign:", error);
+      res.status(500).json({ message: "Failed to delete campaign" });
+    }
+  });
+
+  // File upload and processing routes
+  app.post('/api/mass-campaigns/:id/upload-contacts', isAuthenticated, upload.single('file'), async (req: any, res) => {
+    try {
+      const { id: campaignId } = req.params;
+      const file = req.file;
+      
+      if (!file) {
+        return res.status(400).json({ message: "Nenhum arquivo foi enviado" });
+      }
+
+      // Verify campaign exists
+      const campaign = await storage.getMassCampaignById(campaignId);
+      if (!campaign) {
+        return res.status(404).json({ message: "Campanha não encontrada" });
+      }
+
+      // Create list validation record
+      const validation = await storage.createListValidation({
+        campaignId,
+        filename: file.originalname,
+        status: 'PROCESSING',
+        totalRecords: 0,
+        validRecords: 0,
+        invalidRecords: 0,
+        errorRecords: 0,
+        blacklistedRecords: 0,
+      });
+
+      // Process file based on type
+      let contacts: any[] = [];
+      const fileExtension = path.extname(file.originalname).toLowerCase();
+      
+      try {
+        if (fileExtension === '.csv' || file.mimetype === 'text/csv') {
+          contacts = await parseCSVFile(file.buffer);
+        } else if (fileExtension === '.xlsx' || file.mimetype.includes('spreadsheet')) {
+          contacts = await parseXLSXFile(file.buffer);
+        } else if (fileExtension === '.txt' || file.mimetype === 'text/plain') {
+          contacts = await parseTXTFile(file.buffer);
+        } else {
+          throw new Error('Formato de arquivo não suportado');
+        }
+
+        // Validate record count limit
+        if (contacts.length > 50000) {
+          throw new Error('Arquivo excede o limite de 50.000 registros');
+        }
+
+        // Process and validate contacts
+        const processedContacts = await processContactsList(contacts, campaignId);
+        
+        // Save contacts in batches
+        if (processedContacts.validContacts.length > 0) {
+          await storage.createCampaignContactsBulk(processedContacts.validContacts);
+        }
+
+        // Update validation record with results
+        await storage.updateListValidation(validation.id, {
+          status: 'COMPLETED',
+          totalRecords: contacts.length,
+          validRecords: processedContacts.validContacts.length,
+          invalidRecords: processedContacts.invalidContacts.length,
+          errorRecords: processedContacts.duplicates.length,
+          blacklistedRecords: processedContacts.blacklisted.length,
+          validationReport: {
+            summary: "Arquivo processado com sucesso",
+            validContacts: processedContacts.validContacts.length,
+            invalidContacts: processedContacts.invalidContacts.length,
+            duplicates: processedContacts.duplicates.length,
+            blacklisted: processedContacts.blacklisted.length,
+          },
+        });
+
+        res.json({
+          message: "Arquivo processado com sucesso",
+          validation: {
+            ...validation,
+            totalRecords: contacts.length,
+            validRecords: processedContacts.validContacts.length,
+            invalidRecords: processedContacts.invalidContacts.length,
+            duplicateRecords: processedContacts.duplicates.length,
+            blacklistedRecords: processedContacts.blacklisted.length,
+          }
+        });
+
+      } catch (processingError) {
+        // Update validation record with error
+        await storage.updateListValidation(validation.id, {
+          status: 'FAILED',
+          validationReport: {
+            error: processingError instanceof Error ? processingError.message : 'Erro desconhecido',
+            status: 'failed',
+          },
+        });
+        
+        throw processingError;
+      }
+
+    } catch (error) {
+      console.error("Error processing file upload:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Falha ao processar arquivo"
+      });
+    }
+  });
+
+  // Campaign contacts routes
+  app.get('/api/mass-campaigns/:id/contacts', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const contacts = await storage.getCampaignContacts(id);
+      res.json(contacts);
+    } catch (error) {
+      console.error("Error fetching campaign contacts:", error);
+      res.status(500).json({ message: "Failed to fetch contacts" });
+    }
+  });
+
+  // Phone blacklist routes
+  app.get('/api/blacklist', isAuthenticated, async (req, res) => {
+    try {
+      const blacklist = await storage.getBlacklistedPhones();
+      res.json(blacklist);
+    } catch (error) {
+      console.error("Error fetching blacklist:", error);
+      res.status(500).json({ message: "Failed to fetch blacklist" });
+    }
+  });
+
+  app.post('/api/blacklist', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      const entry = await storage.addToBlacklist({
+        ...req.body,
+        userId,
+      });
+      res.status(201).json(entry);
+    } catch (error) {
+      console.error("Error adding to blacklist:", error);
+      res.status(500).json({ message: "Failed to add to blacklist" });
+    }
+  });
+
+  app.delete('/api/blacklist/:id', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      await storage.removeFromBlacklist(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error removing from blacklist:", error);
+      res.status(500).json({ message: "Failed to remove from blacklist" });
+    }
+  });
+
+  // List validation routes
+  app.get('/api/mass-campaigns/:id/validations', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const validations = await storage.getListValidations(id);
+      res.json(validations);
+    } catch (error) {
+      console.error("Error fetching validations:", error);
+      res.status(500).json({ message: "Failed to fetch validations" });
+    }
+  });
+
+  // Campaign logs routes
+  app.get('/api/mass-campaigns/:id/logs', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const logs = await storage.getCampaignLogs(id);
+      res.json(logs);
+    } catch (error) {
+      console.error("Error fetching campaign logs:", error);
+      res.status(500).json({ message: "Failed to fetch logs" });
     }
   });
 

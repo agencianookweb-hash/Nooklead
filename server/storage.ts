@@ -130,6 +130,7 @@ export interface IStorage {
   // Phone Blacklist operations
   getBlacklistedPhones(): Promise<PhoneBlacklist[]>;
   isPhoneBlacklisted(phone: string): Promise<boolean>;
+  arePhonesBulkBlacklisted(phones: string[]): Promise<Set<string>>;
   addToBlacklist(blacklistEntry: InsertPhoneBlacklist): Promise<PhoneBlacklist>;
   removeFromBlacklist(id: string): Promise<void>;
   getBlacklistByCategory(category: string): Promise<PhoneBlacklist[]>;
@@ -626,6 +627,17 @@ export class DatabaseStorage implements IStorage {
       .from(phoneBlacklist)
       .where(eq(phoneBlacklist.phone, phone));
     return (result?.count || 0) > 0;
+  }
+
+  async arePhonesBulkBlacklisted(phones: string[]): Promise<Set<string>> {
+    if (phones.length === 0) return new Set();
+    
+    const blacklistedPhones = await db
+      .select({ phone: phoneBlacklist.phone })
+      .from(phoneBlacklist)
+      .where(sql`${phoneBlacklist.phone} = ANY(${phones})`);
+    
+    return new Set(blacklistedPhones.map(row => row.phone));
   }
 
   async addToBlacklist(blacklistEntry: InsertPhoneBlacklist): Promise<PhoneBlacklist> {
