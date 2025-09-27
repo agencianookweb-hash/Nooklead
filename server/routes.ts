@@ -11,6 +11,160 @@ import { lookup } from "mime-types";
 import { createReadStream } from "fs";
 import path from "path";
 
+// Blacklist categorization system
+const cnaeBlacklistMapping: Record<string, string> = {
+  // Contabilidade
+  '6920-6': 'CONTABILIDADE', // Atividades de contabilidade
+  '6911-2': 'CONTABILIDADE', // Atividades jurídicas
+  '6920-6/01': 'CONTABILIDADE',
+  '6920-6/02': 'CONTABILIDADE',
+  
+  // Órgãos Públicos  
+  '8411-6': 'PUBLICO', // Administração pública geral
+  '8412-4': 'PUBLICO', // Regulação de atividades de saúde
+  '8413-2': 'PUBLICO', // Regulação de outros serviços
+  '8421-3': 'PUBLICO', // Relações exteriores
+  
+  // Saúde
+  '8610-1': 'SAUDE', // Atividades de atendimento hospitalar
+  '8630-5': 'SAUDE', // Atividade médica ambulatorial
+  '8640-2': 'SAUDE', // Atividades de complementação diagnóstica
+  '8650-0': 'SAUDE', // Atividades de profissionais da nutrição
+  '8660-7': 'SAUDE', // Atividades de apoio à gestão de saúde
+  
+  // Educação
+  '8513-9': 'EDUCACAO', // Ensino fundamental
+  '8520-1': 'EDUCACAO', // Ensino médio
+  '8531-7': 'EDUCACAO', // Educação superior
+  '8541-4': 'EDUCACAO', // Educação profissional
+  '8550-3': 'EDUCACAO', // Atividades de apoio à educação
+  
+  // Call Centers
+  '8220-2': 'CALLCENTER', // Atividades de teleatendimento
+  '6190-6': 'CALLCENTER', // Outras atividades de telecomunicações
+  
+  // Bancos/Financeiras
+  '6421-2': 'FINANCEIRO', // Bancos comerciais
+  '6422-1': 'FINANCEIRO', // Bancos múltiplos
+  '6423-9': 'FINANCEIRO', // Caixas econômicas
+  '6424-7': 'FINANCEIRO', // Bancos de investimento
+  '6431-0': 'FINANCEIRO', // Bancos múltiplos cooperativos
+  '6440-9': 'FINANCEIRO', // Arrendamento mercantil
+  '6450-6': 'FINANCEIRO', // Sociedades de crédito
+  
+  // Religiosas
+  '9491-0': 'RELIGIOSO', // Atividades de organizações religiosas
+  '9499-5': 'RELIGIOSO', // Atividades associativas não especificadas
+};
+
+const blacklistKeywords: Record<string, string[]> = {
+  CONTABILIDADE: [
+    'contabil', 'contador', 'contadoria', 'escritorio contabil',
+    'assessoria contabil', 'consultoria contabil', 'crc', 'contábil',
+    'escritório contábil', 'consultoria', 'assessoria', 'audit'
+  ],
+  PUBLICO: [
+    'prefeitura', 'camara', 'secretaria', 'municipio', 'estado',
+    'governo', 'tribunal', 'cartorio', 'detran', 'receita',
+    'câmara', 'município', 'cartório', 'público', 'municipal',
+    'procon', 'defensoria', 'tribunal de contas', 'procuradoria',
+    'assembleia legislativa', 'senado', 'congresso', 'supremo',
+    'ministério', 'agência reguladora', 'autarquia', 'fundação pública'
+  ],
+  SAUDE: [
+    'hospital', 'clinica', 'laboratorio', 'consultorio', 'pronto socorro',
+    'upa', 'sus', 'unimed', 'amil', 'bradesco saude', 'clínica',
+    'laboratório', 'consultório', 'médico', 'odonto', 'saúde'
+  ],
+  EDUCACAO: [
+    'escola', 'colegio', 'universidade', 'faculdade', 'instituto',
+    'curso', 'educacional', 'ensino', 'pedagogico', 'colégio',
+    'pedagógico', 'educação', 'creche', 'berçário'
+  ],
+  CALLCENTER: [
+    'call center', 'teleatendimento', 'telemarketing', 'sac',
+    'atendimento', 'contact center', 'outsourcing', 'cobrança',
+    'telecobrança', 'central de atendimento'
+  ],
+  FINANCEIRO: [
+    'banco', 'financeira', 'credito', 'emprestimo', 'financiamento',
+    'crédito', 'empréstimo', 'cartão', 'seguro', 'corretora',
+    'investimento', 'financeiro'
+  ],
+  RELIGIOSO: [
+    'igreja', 'templo', 'paroquia', 'diocese', 'congregacao',
+    'assembleia', 'batista', 'evangelica', 'catolica', 'congregação',
+    'evangélica', 'católica', 'cristã', 'pastor', 'padre'
+  ]
+};
+
+// Automatic blacklist detection functions
+function detectBlacklistByCnae(cnae: string): string | null {
+  if (!cnae) return null;
+  
+  // Clean CNAE format (remove dots, slashes, etc)
+  const cleanCnae = cnae.replace(/[^\d-]/g, '');
+  
+  // Check exact match first
+  if (cnaeBlacklistMapping[cleanCnae]) {
+    return cnaeBlacklistMapping[cleanCnae];
+  }
+  
+  // Check partial match (main group)
+  const mainGroup = cleanCnae.split('-')[0] + '-' + cleanCnae.split('-')[1]?.charAt(0);
+  if (cnaeBlacklistMapping[mainGroup]) {
+    return cnaeBlacklistMapping[mainGroup];
+  }
+  
+  return null;
+}
+
+function detectBlacklistByKeywords(companyName: string): string | null {
+  if (!companyName) return null;
+  
+  const normalizedName = companyName.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, ''); // Remove accents
+  
+  for (const [category, keywords] of Object.entries(blacklistKeywords)) {
+    for (const keyword of keywords) {
+      if (normalizedName.includes(keyword.toLowerCase())) {
+        return category;
+      }
+    }
+  }
+  
+  return null;
+}
+
+function detectBlacklistCategory(companyData: { cnae?: string; name?: string; razaoSocial?: string }): {
+  category: string | null;
+  reason: string | null;
+  autoDetected: boolean;
+} {
+  // Note: CNAE detection disabled - CNAE data not available in upload pipeline
+  // TODO: Re-enable when CNAE data is available in contact upload
+  
+  // Try keyword detection
+  const companyName = companyData.name || companyData.razaoSocial || '';
+  if (companyName) {
+    const keywordCategory = detectBlacklistByKeywords(companyName);
+    if (keywordCategory) {
+      return {
+        category: keywordCategory,
+        reason: `Detectado automaticamente por palavra-chave no nome: ${companyName}`,
+        autoDetected: true
+      };
+    }
+  }
+  
+  return {
+    category: null,
+    reason: null,
+    autoDetected: false
+  };
+}
+
 // Helper functions for file processing
 async function parseCSVFile(buffer: Buffer): Promise<any[]> {
   return new Promise((resolve, reject) => {
@@ -100,7 +254,7 @@ function formatBrazilianPhone(phone: string): string {
 }
 
 // Process contacts list with validation and blacklist checking
-async function processContactsList(contacts: any[], campaignId: string): Promise<{
+async function processContactsList(contacts: any[], campaignId: string, userId?: string): Promise<{
   validContacts: any[];
   invalidContacts: any[];
   duplicates: any[];
@@ -143,10 +297,41 @@ async function processContactsList(contacts: any[], campaignId: string): Promise
   const uniquePhones = Array.from(phoneSet);
   const blacklistedPhonesSet = await storage.arePhonesBulkBlacklisted(uniquePhones);
   
-  // Second pass: separate blacklisted from valid contacts
+  // Second pass: automatic blacklist detection and categorization
+  const autoDetectedBlacklist: Array<{
+    phone: string;
+    category: string;
+    reason: string;
+    companyName: string;
+    autoDetected: boolean;
+  }> = [];
+  
   for (const { contact, formattedPhone } of validFormattedContacts) {
+    // Check if already in blacklist
     if (blacklistedPhonesSet.has(formattedPhone)) {
       blacklisted.push({ ...contact, reason: 'Número na blacklist' });
+      continue;
+    }
+    
+    // Automatic blacklist detection
+    const detection = detectBlacklistCategory({
+      name: contact.company || contact.name,
+    });
+    
+    if (detection.category) {
+      // Add to blacklist automatically
+      autoDetectedBlacklist.push({
+        phone: formattedPhone,
+        category: detection.category,
+        reason: detection.reason || 'Detectado automaticamente',
+        companyName: contact.company || contact.name,
+        autoDetected: true,
+      });
+      
+      blacklisted.push({ 
+        ...contact, 
+        reason: `Blacklist automática: ${detection.category} - ${detection.reason}`
+      });
     } else {
       validContacts.push({
         campaignId,
@@ -158,6 +343,23 @@ async function processContactsList(contacts: any[], campaignId: string): Promise
         messageStatus: 'PENDING',
       });
     }
+  }
+  
+  // Store auto-detected blacklist entries (but don't await to not slow down processing)
+  if (autoDetectedBlacklist.length > 0 && userId) {
+    // Process in background - don't await to maintain performance
+    setImmediate(async () => {
+      try {
+        for (const entry of autoDetectedBlacklist) {
+          await storage.addToBlacklist({
+            ...entry,
+            addedBy: userId, // User who uploaded the file
+          });
+        }
+      } catch (error) {
+        console.error('Error saving auto-detected blacklist entries:', error);
+      }
+    });
   }
   
   return { validContacts, invalidContacts, duplicates, blacklisted };
@@ -682,7 +884,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
 
         // Process and validate contacts
-        const processedContacts = await processContactsList(contacts, campaignId);
+        const userId = req.user?.claims?.sub;
+        const processedContacts = await processContactsList(contacts, campaignId, userId);
         
         // Save contacts in batches
         if (processedContacts.validContacts.length > 0) {
@@ -772,7 +975,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       
       const entry = await storage.addToBlacklist({
         ...req.body,
-        userId,
+        addedBy: userId,
       });
       res.status(201).json(entry);
     } catch (error) {
@@ -789,6 +992,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error("Error removing from blacklist:", error);
       res.status(500).json({ message: "Failed to remove from blacklist" });
+    }
+  });
+
+  // Blacklist statistics and management routes
+  app.get('/api/blacklist/stats', isAuthenticated, async (req, res) => {
+    try {
+      const blacklist = await storage.getBlacklistedPhones();
+      
+      // Calculate statistics by category
+      const stats = blacklist.reduce((acc, entry) => {
+        const category = entry.category || 'OTHER';
+        acc[category] = (acc[category] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Calculate today's additions
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const addedToday = blacklist.filter(entry => 
+        entry.createdAt && new Date(entry.createdAt) >= today
+      ).length;
+      
+      res.json({
+        total: blacklist.length,
+        addedToday,
+        categories: stats,
+        activeCategories: Object.keys(stats).length,
+      });
+    } catch (error) {
+      console.error("Error fetching blacklist stats:", error);
+      res.status(500).json({ message: "Failed to fetch blacklist statistics" });
+    }
+  });
+
+  app.get('/api/blacklist/categories/:category', isAuthenticated, async (req, res) => {
+    try {
+      const { category } = req.params;
+      const categoryEntries = await storage.getBlacklistByCategory(category);
+      res.json(categoryEntries);
+    } catch (error) {
+      console.error("Error fetching blacklist by category:", error);
+      res.status(500).json({ message: "Failed to fetch category entries" });
+    }
+  });
+
+  // Auto-detection and bulk categorization
+  app.post('/api/blacklist/detect-company', isAuthenticated, async (req: any, res) => {
+    try {
+      const { cnae, companyName, razaoSocial } = req.body;
+      
+      const detection = detectBlacklistCategory({
+        cnae,
+        name: companyName,
+        razaoSocial,
+      });
+      
+      res.json(detection);
+    } catch (error) {
+      console.error("Error detecting blacklist category:", error);
+      res.status(500).json({ message: "Failed to detect category" });
+    }
+  });
+
+  app.post('/api/blacklist/bulk-add', isAuthenticated, async (req: any, res) => {
+    try {
+      const userId = req.user?.claims?.sub;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      const { entries } = req.body; // Array of { phone, category, reason, companyName?, cnpj? }
+      
+      if (!Array.isArray(entries) || entries.length === 0) {
+        return res.status(400).json({ message: "Invalid entries array" });
+      }
+      
+      const addedEntries = [];
+      const errors = [];
+      
+      for (const entry of entries) {
+        try {
+          const blacklistEntry = await storage.addToBlacklist({
+            phone: entry.phone,
+            category: entry.category,
+            reason: entry.reason || 'Adicionado em lote',
+            cnpj: entry.cnpj || null,
+            companyName: entry.companyName || null,
+            addedBy: userId,
+            autoDetected: entry.autoDetected || false,
+          });
+          addedEntries.push(blacklistEntry);
+        } catch (entryError) {
+          errors.push({
+            phone: entry.phone,
+            error: entryError instanceof Error ? entryError.message : 'Erro desconhecido',
+          });
+        }
+      }
+      
+      res.json({
+        message: `${addedEntries.length} números adicionados à blacklist`,
+        added: addedEntries.length,
+        errors: errors.length,
+        errorDetails: errors,
+      });
+    } catch (error) {
+      console.error("Error bulk adding to blacklist:", error);
+      res.status(500).json({ message: "Failed to bulk add to blacklist" });
+    }
+  });
+
+  // Scan existing contacts for auto-categorization
+  app.post('/api/blacklist/scan-campaign/:id', isAuthenticated, async (req: any, res) => {
+    try {
+      const { id: campaignId } = req.params;
+      const userId = req.user?.claims?.sub;
+      
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
+      
+      // Get campaign contacts
+      const contacts = await storage.getCampaignContacts(campaignId);
+      
+      const detectedCategories = [];
+      
+      for (const contact of contacts) {
+        const detection = detectBlacklistCategory({
+          name: contact.name || '',
+        });
+        
+        if (detection.category) {
+          detectedCategories.push({
+            contactId: contact.id,
+            phone: contact.phone,
+            companyName: contact.name,
+            detectedCategory: detection.category,
+            reason: detection.reason,
+          });
+        }
+      }
+      
+      res.json({
+        totalContacts: contacts.length,
+        detectionsFound: detectedCategories.length,
+        detections: detectedCategories,
+      });
+    } catch (error) {
+      console.error("Error scanning campaign for blacklist:", error);
+      res.status(500).json({ message: "Failed to scan campaign" });
     }
   });
 
