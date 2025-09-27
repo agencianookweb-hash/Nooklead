@@ -29,6 +29,7 @@ import {
   Users,
   DollarSign,
   Timer,
+  HelpCircle,
 } from "lucide-react";
 import {
   LineChart,
@@ -73,6 +74,7 @@ interface CampaignLog {
   phone: string;
   razaoSocial: string;
   status: string;
+  eventType: string;
   errorMessage: string | null;
 }
 
@@ -90,6 +92,15 @@ const statusIcons = {
   READ: { icon: Eye, color: "text-purple-600", label: "👁 Lido" },
   FAILED: { icon: XCircle, color: "text-red-600", label: "❌ Erro" },
   PENDING: { icon: Clock, color: "text-yellow-600", label: "⏳ Processando" },
+};
+
+// Fallback para status não mapeados
+const getStatusIcon = (status: string) => {
+  return statusIcons[status as keyof typeof statusIcons] || {
+    icon: HelpCircle,
+    color: "text-gray-500",
+    label: "❓ Desconhecido"
+  };
 };
 
 export default function CampaignMonitoring() {
@@ -646,7 +657,7 @@ export default function CampaignMonitoring() {
                 </TableRow>
               ) : (
                 logsData.logs.map((log: CampaignLog) => {
-                  const StatusIcon = statusIcons[log.status as keyof typeof statusIcons];
+                  const StatusIcon = getStatusIcon(log.eventType);
                   return (
                     <TableRow key={log.id} data-testid={`row-log-${log.id}`}>
                       <TableCell data-testid={`cell-timestamp-${log.id}`}>
@@ -660,8 +671,17 @@ export default function CampaignMonitoring() {
                       </TableCell>
                       <TableCell data-testid={`cell-status-${log.id}`}>
                         <div className="flex items-center gap-2">
-                          <StatusIcon.icon className={`h-4 w-4 ${StatusIcon.color}`} />
-                          <span>{StatusIcon.label}</span>
+                          {StatusIcon ? (
+                            <>
+                              <StatusIcon.icon className={`h-4 w-4 ${StatusIcon.color}`} />
+                              <span>{StatusIcon.label}</span>
+                            </>
+                          ) : (
+                            <>
+                              <HelpCircle className="h-4 w-4 text-gray-500" />
+                              <span>❓ Status desconhecido</span>
+                            </>
+                          )}
                         </div>
                       </TableCell>
                       <TableCell data-testid={`cell-error-${log.id}`}>
