@@ -1,0 +1,600 @@
+# Módulo de Disparo em Massa - Especificação Expandida
+
+## 1. Visão Geral do Módulo
+
+### 1.1 Objetivo da Tela Separada
+Criar uma interface dedicada para configuração, validação e execução de campanhas de disparo em massa, com controles granulares de execução e monitoramento em tempo real.
+
+### 1.2 Análise Crítica Inicial
+*⚠️ Limitações Identificadas:*
+- *Compliance LGPD*: Disparos em massa podem violar consentimento
+- *Rate Limits*: APIs têm limites que podem quebrar campanhas grandes
+- *Deliverability*: Alto volume pode prejudicar reputação do domínio
+- *Performance*: Bubble pode ter limitações para processamento massivo
+- *Custos*: Disparos grandes podem gerar custos inesperados
+
+## 2. Validador de Listas
+
+### 2.1 Interface de Upload
+
+[Área de Drop/Upload]
+┌─────────────────────────────────────┐
+│  📁 Arraste seu arquivo aqui        │
+│     ou clique para selecionar       │
+│                                     │
+│  Formatos: CSV, XLSX, TXT           │
+│  Limite: 50.000 registros          │
+└─────────────────────────────────────┘
+
+
+### 2.2 Validações Automáticas
+
+#### 2.2.1 Validações de Arquivo
+- ✅ Formato do arquivo (CSV, XLSX, TXT)
+- ✅ Tamanho máximo (10MB)
+- ✅ Número de registros (máx. 50.000)
+- ✅ Codificação de caracteres (UTF-8)
+- ✅ Campos obrigatórios (CNPJ, Telefone, Nome)
+
+#### 2.2.2 Validação de Telefones WhatsApp
+javascript
+// Validação em tempo real via WhatsApp Business API
+const validateWhatsAppNumber = async (phone) => {
+  try {
+    const response = await fetch(`${WHATSAPP_API_URL}/phone_number_status`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        phone_number: phone
+      })
+    });
+    
+    const data = await response.json();
+    return {
+      valid: data.valid,
+      whatsapp_enabled: data.whatsapp_enabled,
+      status: data.status // VALID, INVALID, PROCESSING, RATE_LIMIT
+    };
+  } catch (error) {
+    return { valid: false, error: error.message };
+  }
+};
+
+
+*Status de Validação:*
+- 🟢 *VÁLIDO + WhatsApp*: Número ativo com WhatsApp
+- 🟡 *VÁLIDO - WhatsApp*: Número válido mas sem WhatsApp
+- 🔴 *INVÁLIDO*: Número inexistente ou formato incorreto
+- ⚫ *BLACKLIST*: Número na lista de bloqueio
+- 🟠 *ERRO*: Falha na validação (API offline, rate limit)
+
+#### 2.2.3 Sistema de Blacklist
+*Categorias de Blacklist:*
+- 📊 *Contabilidade*: Escritórios contábeis, contadores
+- 🏛️ *Órgãos Públicos*: Prefeituras, secretarias, autarquias
+- 🏥 *Área da Saúde*: Hospitais, clínicas, laboratórios
+- 🎓 *Educação*: Escolas, universidades, cursos
+- 🏦 *Bancos/Financeiras*: Instituições financeiras
+- 📞 *Call Centers*: Empresas de telemarketing
+- ⛪ *Instituições Religiosas*: Igrejas, templos
+- 🚫 *Opt-out Manual*: Números que solicitaram remoção
+
+*Base de Dados de Blacklist:*
+sql
+-- Tabela de Blacklist
+phone_blacklist (
+  id UUID PRIMARY KEY,
+  phone VARCHAR(20) UNIQUE,
+  category VARCHAR(50), -- contabilidade, publico, saude, etc
+  reason TEXT,
+  cnpj VARCHAR(14), -- se aplicável
+  company_name VARCHAR(255),
+  added_by UUID REFERENCES users(id),
+  auto_detected BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Índices para performance
+CREATE INDEX idx_phone_blacklist_phone ON phone_blacklist(phone);
+CREATE INDEX idx_phone_blacklist_category ON phone_blacklist(category);
+
+
+*⚠️ Análise Crítica - Validações:*
+- *Custo de API*: Validação WhatsApp custa ~R$0,005 por consulta
+- *Rate Limits*: WhatsApp API limita validações (1000/dia em planos básicos)
+- *Falsos Positivos*: Números podem ter WhatsApp mas estar inativos
+- *Solução*: Implementar cache de validações e validação em lotes
+
+### 2.3 Relatório de Validação
+
+📊 Relatório de Validação WhatsApp
+┌─────────────────────────────────────┐
+│ Total de registros: 1.500           │
+│ 🟢 WhatsApp Ativo: 856 (57.1%)     │
+│ 🟡 Válido s/ WhatsApp: 234 (15.6%)  │
+│ 🔴 Números Inválidos: 156 (10.4%)   │
+│ ⚫ Blacklist: 189 (12.6%)           │
+│ 🟠 Erro na Validação: 65 (4.3%)     │
+│                                     │
+│ 📋 Detalhamento Blacklist:          │
+│ • Contabilidade: 89 (47.1%)         │
+│ • Órgãos Públicos: 45 (23.8%)       │
+│ • Área da Saúde: 23 (12.2%)         │
+│ • Call Centers: 18 (9.5%)           │
+│ • Opt-out Manual: 14 (7.4%)         │
+│                                     │
+│ 💰 Custo de Validação: R$ 7,50      │
+│ ⏱️ Tempo de Processamento: 8min 32s  │
+└─────────────────────────────────────┘
+
+[📥 Baixar Válidos] [🔍 Ver Inválidos] [⚙️ Configurar Blacklist] [▶️ Prosseguir]
+
+
+*Ações Disponíveis:*
+- *Baixar Válidos*: Export apenas números com WhatsApp ativo
+- *Ver Inválidos*: Planilha detalhada com motivos de rejeição
+- *Configurar Blacklist*: Adicionar/remover categorias personalizadas
+- *Revalidar Erros*: Tentar novamente números com erro de API
+
+## 3. Configuração de Blacklist
+
+### 3.1 Interface de Gerenciamento
+
+🚫 Gerenciamento de Blacklist
+┌─────────────────────────────────────┐
+│ 📊 Estatísticas Atuais:             │
+│ • Total bloqueados: 45.892          │
+│ • Adicionados hoje: 23              │
+│ • Categorias ativas: 8              │
+│                                     │
+│ 🎯 Categorias Ativas:               │
+│ ☑️ Contabilidade (12.445)           │
+│ ☑️ Órgãos Públicos (8.234)          │
+│ ☑️ Área da Saúde (6.778)            │
+│ ☑️ Call Centers (5.234)             │
+│ ☑️ Educação (4.567)                 │
+│ ☑️ Bancos/Financeiras (3.889)       │
+│ ☑️ Instituições Religiosas (2.345)  │
+│ ☑️ Opt-out Manual (2.400)           │
+│                                     │
+│ [➕ Nova Categoria] [📤 Import] [📥 Export]
+└─────────────────────────────────────┘
+
+
+### 3.2 Detecção Automática por CNAE
+javascript
+// Mapeamento CNAE -> Categoria Blacklist
+const cnaeBlacklist = {
+  // Contabilidade
+  '6920-6': 'contabilidade', // Atividades de contabilidade
+  '6911-2': 'contabilidade', // Atividades jurídicas
+  
+  // Órgãos Públicos  
+  '8411-6': 'publico', // Administração pública geral
+  '8412-4': 'publico', // Regulação de atividades de saúde
+  
+  // Saúde
+  '8610-1': 'saude', // Atividades de atendimento hospitalar
+  '8630-5': 'saude', // Atividade médica ambulatorial
+  
+  // Educação
+  '8513-9': 'educacao', // Ensino fundamental
+  '8520-1': 'educacao', // Ensino médio
+  
+  // Call Centers
+  '8220-2': 'callcenter', // Atividades de teleatendimento
+  
+  // Bancos
+  '6421-2': 'financeiro', // Bancos comerciais
+  '6422-1': 'financeiro', // Bancos múltiplos
+};
+
+const detectBlacklistCategory = (cnae) => {
+  return cnaeBlacklist[cnae] || null;
+};
+
+
+### 3.3 Palavras-Chave para Detecção
+javascript
+const blacklistKeywords = {
+  contabilidade: [
+    'contabil', 'contador', 'contadoria', 'escritorio contabil',
+    'assessoria contabil', 'consultoria contabil', 'crc'
+  ],
+  publico: [
+    'prefeitura', 'camara', 'secretaria', 'municipio', 'estado',
+    'governo', 'tribunal', 'cartorio', 'detran', 'receita'
+  ],
+  saude: [
+    'hospital', 'clinica', 'laboratorio', 'consultorio', 'pronto socorro',
+    'upa', 'sus', 'unimed', 'amil', 'bradesco saude'
+  ],
+  educacao: [
+    'escola', 'colegio', 'universidade', 'faculdade', 'instituto',
+    'curso', 'educacional', 'ensino', 'pedagogico'
+  ],
+  callcenter: [
+    'call center', 'teleatendimento', 'telemarketing', 'sac',
+    'atendimento', 'contact center', 'outsourcing'
+  ]
+};
+
+
+## 4. Cadastro de Campanhas
+
+### 4.1 Configuração Básica
+
+📋 Informações da Campanha
+┌─────────────────────────────────────┐
+│ Nome da Campanha: [________________] │
+│ Descrição: [_______________________] │
+│ Responsável: [@usuario]              │
+│ Tags: [#vendas] [#prospecção]        │
+└─────────────────────────────────────┘
+
+
+### 4.2 Configuração de Canal
+
+📱 Canal de Disparo
+┌─────────────────────────────────────┐
+│ (●) WhatsApp Business               │
+│ ( ) SMS (em desenvolvimento)        │
+│                                     │
+│ 📊 Limite da Conta WhatsApp:        │
+│ • Mensagens/dia: 1.000             │
+│ • Utilizadas hoje: 234 (23.4%)     │
+│ • Disponíveis: 766                 │
+│                                     │
+│ ⚠️ Sua campanha tem 856 contatos    │
+│ válidos. Será executada em 1 dia.   │
+└─────────────────────────────────────┘
+
+
+### 4.3 Configuração de Timing
+
+⏰ Configurações de Envio
+┌─────────────────────────────────────┐
+│ Início: [04/07/2025] [09:00]        │
+│ Fim: [10/07/2025] [18:00]           │
+│                                     │
+│ Horário de funcionamento:           │
+│ Segunda-Sexta: 08:00 - 18:00        │
+│ Sábado: 08:00 - 12:00               │
+│ Domingo: ❌ Não enviar              │
+│                                     │
+│ Taxa de envio: [50] msgs/hora       │
+│ Intervalo mínimo: [2] minutos       │
+│                                     │
+│ 🎯 Estimativa de Conclusão:         │
+│ 856 mensagens ÷ 50/hora = 17h 7min  │
+└─────────────────────────────────────┘
+
+⚠️ WhatsApp Business API Limits:
+• Tier 1: 1K msgs/dia • Tier 2: 10K msgs/dia
+• Você está no Tier 1 - Upgrade disponível
+
+
+*⚠️ Análise Crítica - Timing:*
+- *Rate Limits Dinâmicos*: WhatsApp aumenta limites conforme qualidade das mensagens
+- *Horário Local*: Sistema deve considerar fuso horário do número (DDD)
+- *Throttling Inteligente*: Reduzir velocidade se houver muitas falhas
+- *Warming Period*: Contas novas precisam de aquecimento gradual
+
+### 4.4 Personalização de Mensagem
+
+✏️ Editor de Mensagem WhatsApp
+┌─────────────────────────────────────┐
+│ Olá! Tudo bem?                      │
+│                                     │
+│ Sou [SEU_NOME] da [SUA_EMPRESA].    │
+│ Vi que a {{nome_fantasia}} atua no  │
+│ setor de {{setor}} em {{cidade}}.   │
+│                                     │
+│ Temos uma solução que pode ajudar   │
+│ empresas como a de vocês...         │
+│                                     │
+│ 📱 Caracteres: 287/1024            │
+│ 💰 Custo estimado: R$ 428,00        │
+│                                     │
+│ Variáveis disponíveis:              │
+│ • {{cnpj}} - 12.345.678/0001-90     │
+│ • {{razao_social}} - Empresa Ltda   │
+│ • {{nome_fantasia}} - Loja Central  │
+│ • {{setor}} - Varejo                │
+│ • {{cidade}} - São Paulo            │
+└─────────────────────────────────────┘
+
+[👁️ Pré-visualizar] [📱 Testar Envio] [💾 Salvar Template]
+
+⚠️ Dicas para WhatsApp Business:
+• Use linguagem natural e pessoal
+• Evite CAPS LOCK e excesso de emojis  
+• Inclua identificação clara da empresa
+• Mensagens muito longas podem ser cortadas
+
+
+## 5. Sistema de Execução e Monitoramento
+
+### 5.1 Dashboard de Campanha Ativa
+
+🚀 Campanha: "Prospecção Julho 2025"
+┌─────────────────────────────────────┐
+│ Status: 🟡 Executando               │
+│ Progresso: ████████░░░ 68%          │
+│                                     │
+│ 📊 Métricas WhatsApp:               │
+│ • Total válidos: 856                │
+│ • Enviadas: 582                     │
+│ • Entregues: 567 (97.4%)            │
+│ • Lidas: 234 (41.3%)                │
+│ • Respondidas: 28 (4.9%)            │
+│ • Falharam: 15 (2.6%)               │
+│                                     │
+│ ⏱️ Timing:                          │
+│ • Pendentes: 274                    │
+│ • Conclusão: 5h 28min               │
+│ • Velocidade: 52 msgs/hora          │
+│                                     │
+│ 💰 Custos:                          │
+│ • Validação: R$ 4,28                │
+│ • Envios: R$ 291,00                 │
+│ • Total: R$ 295,28                  │
+└─────────────────────────────────────┘
+
+[⏸️ Pausar] [⏹️ Parar] [📊 Detalhes] [📥 Respostas]
+
+
+### 4.2 Controles de Execução
+
+#### 4.2.1 Pausar Campanha
+
+⏸️ Pausar Campanha
+┌─────────────────────────────────────┐
+│ A campanha será pausada após o      │
+│ envio atual ser concluído.          │
+│                                     │
+│ Mensagens na fila: 398              │
+│ Tempo para pausa: ~2 minutos        │
+│                                     │
+│ [Pausar Agora] [Cancelar]           │
+└─────────────────────────────────────┘
+
+
+#### 4.2.2 Parar Campanha
+
+⏹️ Parar Campanha
+┌─────────────────────────────────────┐
+│ ⚠️ ATENÇÃO: Esta ação é irreversível │
+│                                     │
+│ A campanha será interrompida        │
+│ imediatamente. Mensagens pendentes  │
+│ NÃO serão enviadas.                 │
+│                                     │
+│ Mensagens que serão perdidas: 398   │
+│                                     │
+│ Motivo da interrupção:              │
+│ [_________________________________] │
+│                                     │
+│ [Confirmar Parada] [Cancelar]       │
+└─────────────────────────────────────┘
+
+
+*⚠️ Análise Crítica - Controles:*
+- *Problema*: Pausa pode não ser imediata devido a processamento assíncrono
+- *Solução*: Implementar flag de controle verificada a cada iteração
+- *Problema*: Bubble pode não suportar processamento em background
+- *Solução*: Usar Supabase Functions ou webhooks para processamento
+
+### 4.3 Logs Detalhados
+
+📋 Log de Execução
+┌─────────────────────────────────────┐
+│ 14:23:45 | ✅ | 11987654321 | Enviado
+│ 14:23:47 | ❌ | 11999888777 | Número inválido
+│ 14:23:49 | ✅ | 11955443322 | Enviado
+│ 14:23:51 | ⏳ | 11944332211 | Processando
+│ 14:23:53 | ✅ | 11933221100 | Enviado
+│                                     │
+│ Filtros: [Todos] [Sucesso] [Erro]   │
+│ Buscar: [________________] [🔍]      │
+└─────────────────────────────────────┘
+
+[Exportar Logs] [Reprocessar Erros]
+
+
+## 5. Estrutura de Dados Expandida
+
+### 5.1 Tabelas Novas
+sql
+-- Campanhas de Disparo
+mass_campaigns (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES users(id),
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  channel VARCHAR(50), -- whatsapp, email, sms
+  message_template TEXT,
+  status VARCHAR(50), -- draft, validating, scheduled, running, paused, completed, stopped
+  total_records INTEGER,
+  sent_count INTEGER DEFAULT 0,
+  success_count INTEGER DEFAULT 0,
+  error_count INTEGER DEFAULT 0,
+  send_rate INTEGER DEFAULT 50, -- msgs per hour
+  start_time TIMESTAMPTZ,
+  end_time TIMESTAMPTZ,
+  working_hours JSONB, -- horários de funcionamento
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Lista de Contatos da Campanha
+campaign_contacts (
+  id UUID PRIMARY KEY,
+  campaign_id UUID REFERENCES mass_campaigns(id),
+  cnpj VARCHAR(14),
+  razao_social VARCHAR(255),
+  nome_fantasia VARCHAR(255),
+  phone VARCHAR(20),
+  setor VARCHAR(100),
+  cidade VARCHAR(100),
+  custom_data JSONB, -- dados personalizados da planilha
+  
+  -- Status de Validação WhatsApp
+  phone_validation_status VARCHAR(50), -- valid_whatsapp, valid_no_whatsapp, invalid, blacklisted, error
+  whatsapp_enabled BOOLEAN DEFAULT false,
+  blacklist_category VARCHAR(50), -- contabilidade, publico, saude, callcenter, optout
+  blacklist_reason TEXT,
+  validation_timestamp TIMESTAMPTZ,
+  validation_cost DECIMAL(10,4), -- custo da validação em reais
+  
+  -- Status de Envio
+  send_status VARCHAR(50), -- pending, sent, delivered, read, replied, failed
+  send_timestamp TIMESTAMPTZ,
+  delivery_timestamp TIMESTAMPTZ,
+  read_timestamp TIMESTAMPTZ,
+  reply_timestamp TIMESTAMPTZ,
+  error_message TEXT,
+  
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Validação de Listas
+list_validations (
+  id UUID PRIMARY KEY,
+  campaign_id UUID REFERENCES mass_campaigns(id),
+  filename VARCHAR(255),
+  total_records INTEGER,
+  valid_records INTEGER,
+  invalid_records INTEGER,
+  validation_report JSONB,
+  status VARCHAR(50), -- processing, completed, failed
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Logs de Execução
+campaign_logs (
+  id UUID PRIMARY KEY,
+  campaign_id UUID REFERENCES mass_campaigns(id),
+  contact_id UUID REFERENCES campaign_contacts(id),
+  event_type VARCHAR(50), -- sent, delivered, read, replied, failed, paused, stopped
+  message TEXT,
+  metadata JSONB,
+  timestamp TIMESTAMPTZ DEFAULT NOW()
+);
+
+
+## 6. Fluxos de Navegação
+
+### 6.1 Fluxo de Criação de Campanha
+
+1. Dashboard → [Novo Disparo em Massa]
+2. Upload de Lista → Validação Automática
+3. Correção de Erros (se necessário)
+4. Configuração da Campanha
+5. Criação da Mensagem
+6. Teste de Envio
+7. Agendamento/Execução
+
+
+### 6.2 Fluxo de Monitoramento
+
+1. Dashboard → [Campanhas Ativas]
+2. Seleção da Campanha
+3. Visualização de Métricas
+4. Ações de Controle (Pausar/Parar)
+5. Análise de Logs
+6. Exportação de Relatórios
+
+
+## 7. Considerações de Implementação
+
+### 7.1 Limitações do Bubble
+*⚠️ Problemas Identificados:*
+- *Processamento em Lote*: Bubble não é ideal para processamento massivo
+- *Timeouts*: Requests podem dar timeout em listas grandes
+- *Concurrent Users*: Performance degrada com muitos usuários simultâneos
+
+*💡 Soluções Propostas:*
+- *Backend Híbrido*: Usar Supabase Edge Functions para processamento pesado
+- *Queue System*: Implementar fila de processamento assíncrono
+- *Chunking*: Dividir listas grandes em lotes menores
+
+### 7.2 Integrações Críticas
+javascript
+// Exemplo de integração com WhatsApp Business API
+const sendWhatsAppMessage = async (contact, message) => {
+  try {
+    const response = await fetch(`${WHATSAPP_API_URL}/messages`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${WHATSAPP_TOKEN}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        messaging_product: 'whatsapp',
+        to: contact.phone,
+        type: 'text',
+        text: { body: personalizeMessage(message, contact) }
+      })
+    });
+    
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return await response.json();
+    
+  } catch (error) {
+    console.error('WhatsApp send error:', error);
+    throw error;
+  }
+};
+
+
+### 7.3 Compliance e Segurança
+*📋 Checklist LGPD:*
+- [ ] Verificar consentimento antes do envio
+- [ ] Implementar opt-out automático
+- [ ] Logs de auditoria para todas as ações
+- [ ] Criptografia de dados sensíveis
+- [ ] Retenção limitada de dados pessoais
+
+## 8. Métricas de Sucesso
+
+### 8.1 KPIs Operacionais
+- *Taxa de Entrega*: > 95%
+- *Taxa de Erro*: < 5%
+- *Tempo de Processamento*: < 2min por 1000 registros
+- *Uptime*: > 99.5%
+
+### 8.2 KPIs de Negócio
+- *Taxa de Resposta*: > 3%
+- *Leads Qualificados*: > 15% das respostas
+- *ROI da Campanha*: > 200%
+- *Tempo de Setup*: < 30min por campanha
+
+## 9. Próximos Passos
+
+### 9.1 Validação Técnica
+- [ ] Testes de carga com APIs externas
+- [ ] Prototipo de processamento assíncrono
+- [ ] Validação de limites do Bubble
+- [ ] Análise de custos por volume
+
+### 9.2 Validação Jurídica
+- [ ] Revisão compliance LGPD
+- [ ] Política de uso aceitável
+- [ ] Termos de responsabilidade
+- [ ] Procedimentos de opt-out
+
+---
+
+*⚠️ Considerações Finais:*
+
+Este módulo adiciona complexidade significativa ao sistema. Recomendo uma abordagem incremental:
+
+1. *MVP*: Validador simples + disparo básico
+2. *V2*: Controles avançados + monitoramento
+3. *V3*: Analytics avançados + otimizações
+
+A gamificação pode ser prejudicada se o foco mudar para volume vs. qualidade. Considere métricas balanceadas que premiem tanto quantidade quanto qualidade dos leads gerados.

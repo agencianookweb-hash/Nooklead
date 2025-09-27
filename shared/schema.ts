@@ -12,6 +12,7 @@ import {
   pgEnum,
   uuid
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { relations } from "drizzle-orm";
 import { createInsertSchema, createSelectSchema } from "drizzle-zod";
 import { z } from "zod";
@@ -216,6 +217,116 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow(),
 });
 
+// Mass Messaging Module Tables
+
+// Campanhas de Disparo em Massa
+export const massCampaigns = pgTable("mass_campaigns", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  name: varchar("name").notNull(),
+  description: text("description"),
+  channel: text("channel", { enum: ["WHATSAPP", "EMAIL", "SMS"] }).default("WHATSAPP"),
+  messageTemplate: text("message_template"),
+  status: text("status", { 
+    enum: ["DRAFT", "VALIDATING", "SCHEDULED", "RUNNING", "PAUSED", "COMPLETED", "STOPPED"] 
+  }).default("DRAFT"),
+  totalRecords: integer("total_records").default(0),
+  sentCount: integer("sent_count").default(0),
+  successCount: integer("success_count").default(0),
+  errorCount: integer("error_count").default(0),
+  sendRate: integer("send_rate").default(50), // msgs per hour
+  startTime: timestamp("start_time"),
+  endTime: timestamp("end_time"),
+  workingHours: jsonb("working_hours"),
+  validationCost: decimal("validation_cost", { precision: 10, scale: 4 }).default("0"),
+  sendingCost: decimal("sending_cost", { precision: 10, scale: 4 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// Lista de Contatos da Campanha
+export const campaignContacts = pgTable("campaign_contacts", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => massCampaigns.id, { onDelete: "cascade" }),
+  cnpj: varchar("cnpj"),
+  razaoSocial: varchar("razao_social"),
+  nomeFantasia: varchar("nome_fantasia"),
+  phone: varchar("phone"),
+  setor: varchar("setor"),
+  cidade: varchar("cidade"),
+  customData: jsonb("custom_data"),
+  
+  // Status de Validação WhatsApp
+  phoneValidationStatus: text("phone_validation_status", { 
+    enum: ["VALID_WHATSAPP", "VALID_NO_WHATSAPP", "INVALID", "BLACKLISTED", "ERROR"] 
+  }),
+  whatsappEnabled: boolean("whatsapp_enabled").default(false),
+  blacklistCategory: text("blacklist_category", { 
+    enum: ["CONTABILIDADE", "PUBLICO", "SAUDE", "CALLCENTER", "EDUCACAO", "FINANCEIRO", "RELIGIOSO", "OPTOUT"] 
+  }),
+  blacklistReason: text("blacklist_reason"),
+  validationTimestamp: timestamp("validation_timestamp"),
+  validationCost: decimal("validation_cost", { precision: 10, scale: 4 }),
+  
+  // Status de Envio
+  sendStatus: text("send_status", { 
+    enum: ["PENDING", "SENT", "DELIVERED", "READ", "REPLIED", "FAILED"] 
+  }).default("PENDING"),
+  sendTimestamp: timestamp("send_timestamp"),
+  deliveryTimestamp: timestamp("delivery_timestamp"),
+  readTimestamp: timestamp("read_timestamp"),
+  replyTimestamp: timestamp("reply_timestamp"),
+  errorMessage: text("error_message"),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Sistema de Blacklist
+export const phoneBlacklist = pgTable("phone_blacklist", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  phone: varchar("phone").unique().notNull(),
+  category: text("category", { 
+    enum: ["CONTABILIDADE", "PUBLICO", "SAUDE", "CALLCENTER", "EDUCACAO", "FINANCEIRO", "RELIGIOSO", "OPTOUT"] 
+  }).notNull(),
+  reason: text("reason"),
+  cnpj: varchar("cnpj"),
+  companyName: varchar("company_name"),
+  addedBy: varchar("added_by").notNull().references(() => users.id, { onDelete: "cascade" }),
+  autoDetected: boolean("auto_detected").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Validação de Listas
+export const listValidations = pgTable("list_validations", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => massCampaigns.id, { onDelete: "cascade" }),
+  filename: varchar("filename").notNull(),
+  totalRecords: integer("total_records").default(0),
+  validRecords: integer("valid_records").default(0),
+  invalidRecords: integer("invalid_records").default(0),
+  blacklistedRecords: integer("blacklisted_records").default(0),
+  errorRecords: integer("error_records").default(0),
+  validationReport: jsonb("validation_report"),
+  status: text("status", { enum: ["PROCESSING", "COMPLETED", "FAILED"] }).default("PROCESSING"),
+  processingTime: integer("processing_time"), // seconds
+  totalCost: decimal("total_cost", { precision: 10, scale: 4 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Logs de Execução
+export const campaignLogs = pgTable("campaign_logs", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  campaignId: varchar("campaign_id").notNull().references(() => massCampaigns.id, { onDelete: "cascade" }),
+  contactId: varchar("contact_id").references(() => campaignContacts.id, { onDelete: "cascade" }),
+  eventType: text("event_type", { 
+    enum: ["SENT", "DELIVERED", "READ", "REPLIED", "FAILED", "PAUSED", "STOPPED", "RESUMED"] 
+  }).notNull(),
+  message: text("message"),
+  metadata: jsonb("metadata"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+
 // Relations
 export const usersRelations = relations(users, ({ one, many }) => ({
   team: one(teams, { fields: [users.teamId], references: [teams.id] }),
@@ -225,6 +336,8 @@ export const usersRelations = relations(users, ({ one, many }) => ({
   interactions: many(interactions),
   sales: many(sales),
   campaigns: many(campaigns),
+  massCampaigns: many(massCampaigns),
+  phoneBlacklist: many(phoneBlacklist),
   rankings: many(rankings),
   goals: many(goals),
   achievements: many(achievements),
@@ -278,6 +391,31 @@ export const notificationsRelations = relations(notifications, ({ one }) => ({
   user: one(users, { fields: [notifications.userId], references: [users.id] }),
 }));
 
+// Mass Messaging Module Relations
+export const massCampaignsRelations = relations(massCampaigns, ({ one, many }) => ({
+  user: one(users, { fields: [massCampaigns.userId], references: [users.id] }),
+  contacts: many(campaignContacts),
+  validations: many(listValidations),
+  logs: many(campaignLogs),
+}));
+
+export const campaignContactsRelations = relations(campaignContacts, ({ one }) => ({
+  campaign: one(massCampaigns, { fields: [campaignContacts.campaignId], references: [massCampaigns.id] }),
+}));
+
+export const phoneBlacklistRelations = relations(phoneBlacklist, ({ one }) => ({
+  addedByUser: one(users, { fields: [phoneBlacklist.addedBy], references: [users.id] }),
+}));
+
+export const listValidationsRelations = relations(listValidations, ({ one }) => ({
+  campaign: one(massCampaigns, { fields: [listValidations.campaignId], references: [massCampaigns.id] }),
+}));
+
+export const campaignLogsRelations = relations(campaignLogs, ({ one }) => ({
+  campaign: one(massCampaigns, { fields: [campaignLogs.campaignId], references: [massCampaigns.id] }),
+  contact: one(campaignContacts, { fields: [campaignLogs.contactId], references: [campaignContacts.id] }),
+}));
+
 // Schemas
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
@@ -315,6 +453,33 @@ export const insertInteractionSchema = createInsertSchema(interactions).omit({
   updatedAt: true,
 });
 
+// Mass Messaging Module Schemas
+export const insertMassCampaignSchema = createInsertSchema(massCampaigns).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertCampaignContactSchema = createInsertSchema(campaignContacts).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertPhoneBlacklistSchema = createInsertSchema(phoneBlacklist).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertListValidationSchema = createInsertSchema(listValidations).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertCampaignLogSchema = createInsertSchema(campaignLogs).omit({
+  id: true,
+  timestamp: true,
+});
+
 // Types
 export type UpsertUser = typeof users.$inferInsert;
 export type User = typeof users.$inferSelect;
@@ -334,3 +499,16 @@ export type InsertLead = z.infer<typeof insertLeadSchema>;
 export type InsertSale = z.infer<typeof insertSaleSchema>;
 export type InsertCampaign = z.infer<typeof insertCampaignSchema>;
 export type InsertInteraction = z.infer<typeof insertInteractionSchema>;
+
+// Mass Messaging Module Types
+export type MassCampaign = typeof massCampaigns.$inferSelect;
+export type CampaignContact = typeof campaignContacts.$inferSelect;
+export type PhoneBlacklist = typeof phoneBlacklist.$inferSelect;
+export type ListValidation = typeof listValidations.$inferSelect;
+export type CampaignLog = typeof campaignLogs.$inferSelect;
+
+export type InsertMassCampaign = z.infer<typeof insertMassCampaignSchema>;
+export type InsertCampaignContact = z.infer<typeof insertCampaignContactSchema>;
+export type InsertPhoneBlacklist = z.infer<typeof insertPhoneBlacklistSchema>;
+export type InsertListValidation = z.infer<typeof insertListValidationSchema>;
+export type InsertCampaignLog = z.infer<typeof insertCampaignLogSchema>;
