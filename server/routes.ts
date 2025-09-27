@@ -2,6 +2,7 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
+import { campaignEngine } from "./campaignEngine";
 import { insertLeadSchema, insertSaleSchema, insertCompanySchema, insertMassCampaignSchema, insertCampaignContactSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -1814,28 +1815,45 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Campaign control routes
+  app.post('/api/mass-campaigns/:id/start', isAuthenticated, async (req, res) => {
+    try {
+      const { id } = req.params;
+      
+      console.log(`[API] Starting campaign ${id}`);
+      await campaignEngine.startCampaign(id);
+      
+      const updatedCampaign = await storage.getMassCampaignById(id);
+      if (!updatedCampaign) {
+        return res.status(404).json({ message: "Campaign not found after start" });
+      }
+      
+      res.json(updatedCampaign);
+    } catch (error) {
+      console.error("Error starting campaign:", error);
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to start campaign" 
+      });
+    }
+  });
+
   app.post('/api/mass-campaigns/:id/pause', isAuthenticated, async (req, res) => {
     try {
       const { id } = req.params;
       
-      const campaign = await storage.getMassCampaignById(id);
-      if (!campaign) {
-        return res.status(404).json({ message: "Campaign not found" });
-      }
+      console.log(`[API] Pausing campaign ${id}`);
+      await campaignEngine.pauseCampaign(id);
       
-      if (campaign.status !== 'RUNNING') {
-        return res.status(400).json({ message: "Campaign is not running" });
+      const updatedCampaign = await storage.getMassCampaignById(id);
+      if (!updatedCampaign) {
+        return res.status(404).json({ message: "Campaign not found after pause" });
       }
-      
-      const updatedCampaign = await storage.updateMassCampaign(id, { 
-        status: 'PAUSED',
-        updatedAt: new Date() 
-      });
       
       res.json(updatedCampaign);
     } catch (error) {
       console.error("Error pausing campaign:", error);
-      res.status(500).json({ message: "Failed to pause campaign" });
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to pause campaign" 
+      });
     }
   });
 
@@ -1843,24 +1861,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const campaign = await storage.getMassCampaignById(id);
-      if (!campaign) {
-        return res.status(404).json({ message: "Campaign not found" });
-      }
+      console.log(`[API] Resuming campaign ${id}`);
+      await campaignEngine.resumeCampaign(id);
       
-      if (campaign.status !== 'PAUSED') {
-        return res.status(400).json({ message: "Campaign is not paused" });
+      const updatedCampaign = await storage.getMassCampaignById(id);
+      if (!updatedCampaign) {
+        return res.status(404).json({ message: "Campaign not found after resume" });
       }
-      
-      const updatedCampaign = await storage.updateMassCampaign(id, { 
-        status: 'RUNNING',
-        updatedAt: new Date() 
-      });
       
       res.json(updatedCampaign);
     } catch (error) {
       console.error("Error resuming campaign:", error);
-      res.status(500).json({ message: "Failed to resume campaign" });
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to resume campaign" 
+      });
     }
   });
 
@@ -1868,25 +1882,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { id } = req.params;
       
-      const campaign = await storage.getMassCampaignById(id);
-      if (!campaign) {
-        return res.status(404).json({ message: "Campaign not found" });
-      }
+      console.log(`[API] Stopping campaign ${id}`);
+      await campaignEngine.stopCampaign(id);
       
-      if (!['RUNNING', 'PAUSED'].includes(campaign.status || '')) {
-        return res.status(400).json({ message: "Campaign cannot be stopped" });
+      const updatedCampaign = await storage.getMassCampaignById(id);
+      if (!updatedCampaign) {
+        return res.status(404).json({ message: "Campaign not found after stop" });
       }
-      
-      const updatedCampaign = await storage.updateMassCampaign(id, { 
-        status: 'STOPPED',
-        endTime: new Date(),
-        updatedAt: new Date() 
-      });
       
       res.json(updatedCampaign);
     } catch (error) {
       console.error("Error stopping campaign:", error);
-      res.status(500).json({ message: "Failed to stop campaign" });
+      res.status(500).json({ 
+        message: error instanceof Error ? error.message : "Failed to stop campaign" 
+      });
     }
   });
 
