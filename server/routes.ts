@@ -1,8 +1,10 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
+import { Server as SocketIOServer } from "socket.io";
 import { storage } from "./storage";
 import { setupAuth, isAuthenticated } from "./replitAuth";
 import { campaignEngine } from "./campaignEngine";
+import { whatsappService } from "./whatsappService";
 import { insertLeadSchema, insertSaleSchema, insertCompanySchema, insertMassCampaignSchema, insertCampaignContactSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -2101,6 +2103,175 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // WhatsApp Connection Endpoints
+  
+  // Generate QR Code for WhatsApp connection
+  app.post("/api/whatsapp/generate-qr", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      console.log(`Generating QR code for user ${userId}`);
+      
+      const result = await whatsappService.generateQRCode(userId);
+      
+      res.json({
+        success: true,
+        data: {
+          sessionId: result.sessionId,
+          qrCode: result.qrCode,
+          status: 'WAITING_QR'
+        }
+      });
+    } catch (error) {
+      console.error('Error generating QR code:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to generate QR code',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Get WhatsApp connection status
+  app.get("/api/whatsapp/status", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      const status = await whatsappService.getConnectionStatus(userId);
+      
+      res.json({
+        success: true,
+        data: status
+      });
+    } catch (error) {
+      console.error('Error getting WhatsApp status:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to get connection status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Disconnect WhatsApp
+  app.post("/api/whatsapp/disconnect", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      await whatsappService.disconnectUser(userId);
+      
+      res.json({
+        success: true,
+        message: 'WhatsApp disconnected successfully'
+      });
+    } catch (error) {
+      console.error('Error disconnecting WhatsApp:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to disconnect WhatsApp',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Check if user has active WhatsApp connection
+  app.get("/api/whatsapp/is-connected", isAuthenticated, async (req, res) => {
+    try {
+      const userId = req.user!.id;
+      
+      const isConnected = await whatsappService.isUserConnected(userId);
+      
+      res.json({
+        success: true,
+        data: {
+          isConnected
+        }
+      });
+    } catch (error) {
+      console.error('Error checking WhatsApp connection:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to check connection status',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Create HTTP server and setup WebSocket
   const httpServer = createServer(app);
+  
+  // Setup Socket.IO for real-time WhatsApp status updates
+  const io = new SocketIOServer(httpServer, {
+    cors: {
+      origin: process.env.NODE_ENV === "development" ? "http://localhost:5000" : false,
+      methods: ["GET", "POST"]
+    },
+    path: "/socket.io"
+  });
+
+  // Store user socket mappings for targeted updates
+  const userSockets = new Map<string, string>(); // userId -> socketId
+  const socketUsers = new Map<string, string>(); // socketId -> userId
+
+  io.on('connection', (socket) => {
+    console.log('Client connected to WhatsApp WebSocket:', socket.id);
+
+    // Handle user authentication for socket
+    socket.on('authenticate', (data: { userId: string }) => {
+      if (data.userId) {
+        userSockets.set(data.userId, socket.id);
+        socketUsers.set(socket.id, data.userId);
+        console.log(`User ${data.userId} authenticated on socket ${socket.id}`);
+        
+        // Send current WhatsApp status
+        whatsappService.getConnectionStatus(data.userId).then(status => {
+          socket.emit('whatsapp-status', {
+            success: true,
+            data: status
+          });
+        }).catch(error => {
+          console.error('Error getting status for new connection:', error);
+        });
+      }
+    });
+
+    socket.on('disconnect', () => {
+      const userId = socketUsers.get(socket.id);
+      if (userId) {
+        userSockets.delete(userId);
+        socketUsers.delete(socket.id);
+        console.log(`User ${userId} disconnected from WhatsApp WebSocket`);
+      }
+    });
+  });
+
+  // Listen to WhatsApp service events and emit to connected clients
+  whatsappService.on('statusUpdate', (data: {
+    userId: string;
+    sessionId: string;
+    status: string;
+    qrCode?: string;
+    connectedPhone?: string;
+    errorMessage?: string;
+  }) => {
+    const socketId = userSockets.get(data.userId);
+    if (socketId) {
+      io.to(socketId).emit('whatsapp-status', {
+        success: true,
+        data: {
+          status: data.status,
+          sessionId: data.sessionId,
+          qrCode: data.qrCode,
+          connectedPhone: data.connectedPhone,
+          errorMessage: data.errorMessage,
+          lastActivity: new Date()
+        }
+      });
+      console.log(`Sent WhatsApp status update to user ${data.userId}: ${data.status}`);
+    }
+  });
+
+  console.log('WhatsApp WebSocket server initialized');
+
   return httpServer;
 }

@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
+import { WhatsAppStatus } from "@/components/whatsapp/whatsapp-status";
 import {
   AlertCircle,
   Plus,
@@ -219,6 +220,9 @@ export default function Campaigns() {
           </Button>
         </Link>
       </div>
+
+      {/* WhatsApp Status */}
+      <WhatsAppStatus variant="inline" showActions={true} />
 
       {/* Filtros */}
       <Card data-testid="card-filters">

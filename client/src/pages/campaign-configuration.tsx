@@ -19,6 +19,8 @@ import { useToast } from "@/hooks/use-toast";
 import { Calendar, Clock, MessageSquare, Settings, Target, Send, Eye, Zap } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { WhatsAppStatus, useWhatsAppStatus } from "@/components/whatsapp/whatsapp-status";
+import { AlertTriangle } from "lucide-react";
 
 // Schema de validação baseado no esquema massCampaigns existente
 const campaignConfigSchema = z.object({
@@ -80,6 +82,7 @@ const PREVIEW_DATA = {
 export default function CampaignConfiguration() {
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("basic");
+  const { isConnected: isWhatsAppConnected, isLoading: whatsAppLoading } = useWhatsAppStatus();
 
   const form = useForm<CampaignConfigData>({
     resolver: zodResolver(campaignConfigSchema),
@@ -108,6 +111,11 @@ export default function CampaignConfiguration() {
   
   const createCampaignMutation = useMutation({
     mutationFn: async (data: CampaignConfigData) => {
+      // Check WhatsApp connection for WhatsApp campaigns
+      if (data.channel === "WHATSAPP" && !isWhatsAppConnected) {
+        throw new Error("WhatsApp deve estar conectado para criar campanhas de WhatsApp. Conecte sua conta na página de WhatsApp.");
+      }
+
       // Preparar os dados para o backend
       const campaignData = {
         name: data.name,
@@ -179,6 +187,14 @@ export default function CampaignConfiguration() {
           <p className="text-muted-foreground">Configure sua campanha de disparo em massa</p>
         </div>
       </div>
+
+      {/* WhatsApp Status - Show warning for WhatsApp campaigns */}
+      {watchedValues.channel === "WHATSAPP" && (
+        <WhatsAppStatus 
+          variant={isWhatsAppConnected ? "inline" : "inline"} 
+          showActions={true} 
+        />
+      )}
 
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">

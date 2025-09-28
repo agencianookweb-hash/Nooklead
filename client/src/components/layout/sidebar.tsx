@@ -18,6 +18,7 @@ import {
   BarChart3,
   Settings,
   Send,
+  MessageCircle,
 } from "lucide-react";
 
 const navigation = [
@@ -25,6 +26,7 @@ const navigation = [
   { name: "Gerar Leads", href: "/leads", icon: Search },
   { name: "Pipeline", href: "/kanban", icon: Columns },
   { name: "Campanhas", href: "/campaigns", icon: Send },
+  { name: "WhatsApp", href: "/whatsapp/connect", icon: MessageCircle },
   { name: "Vendas", href: "/sales", icon: DollarSign },
   { name: "Ranking", href: "/ranking", icon: Trophy },
 ];

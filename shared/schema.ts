@@ -326,6 +326,24 @@ export const campaignLogs = pgTable("campaign_logs", {
   timestamp: timestamp("timestamp").defaultNow(),
 });
 
+// Conexões WhatsApp para Campanhas
+export const whatsappConnections = pgTable("whatsapp_connections", {
+  id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sessionId: varchar("session_id").unique(),
+  status: text("status", { 
+    enum: ["DISCONNECTED", "GENERATING_QR", "WAITING_QR", "CONNECTED", "ERROR"] 
+  }).default("DISCONNECTED"),
+  qrCode: text("qr_code"),
+  qrCodeExpires: timestamp("qr_code_expires"),
+  connectedPhone: varchar("connected_phone"),
+  connectionData: jsonb("connection_data"), // Stores session data encrypted
+  lastActivity: timestamp("last_activity"),
+  errorMessage: text("error_message"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 // Histórico de Validações de Números WhatsApp (cada validação = 1 registro)
 export const phoneValidations = pgTable("phone_validations", {
   id: varchar("id").primaryKey().notNull().default(sql`gen_random_uuid()`),
@@ -528,6 +546,12 @@ export const insertCampaignLogSchema = createInsertSchema(campaignLogs).omit({
   timestamp: true,
 });
 
+export const insertWhatsappConnectionSchema = createInsertSchema(whatsappConnections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertPhoneValidationSchema = createInsertSchema(phoneValidations).omit({
   id: true,
   createdAt: true,
@@ -567,6 +591,7 @@ export type ListValidation = typeof listValidations.$inferSelect;
 export type CampaignLog = typeof campaignLogs.$inferSelect;
 export type PhoneValidation = typeof phoneValidations.$inferSelect;
 export type PhoneValidationCache = typeof phoneValidationCache.$inferSelect;
+export type WhatsappConnection = typeof whatsappConnections.$inferSelect;
 
 export type InsertMassCampaign = z.infer<typeof insertMassCampaignSchema>;
 export type InsertCampaignContact = z.infer<typeof insertCampaignContactSchema>;
@@ -575,3 +600,4 @@ export type InsertListValidation = z.infer<typeof insertListValidationSchema>;
 export type InsertCampaignLog = z.infer<typeof insertCampaignLogSchema>;
 export type InsertPhoneValidation = z.infer<typeof insertPhoneValidationSchema>;
 export type InsertPhoneValidationCache = z.infer<typeof insertPhoneValidationCacheSchema>;
+export type InsertWhatsappConnection = z.infer<typeof insertWhatsappConnectionSchema>;

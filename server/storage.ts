@@ -17,6 +17,7 @@ import {
   phoneValidationCache,
   listValidations,
   campaignLogs,
+  whatsappConnections,
   type User,
   type UpsertUser,
   type Company,
@@ -31,6 +32,7 @@ import {
   type PhoneValidationCache,
   type ListValidation,
   type CampaignLog,
+  type WhatsappConnection,
   type InsertCompany,
   type InsertLead,
   type InsertSale,
@@ -43,6 +45,7 @@ import {
   type InsertPhoneValidationCache,
   type InsertListValidation,
   type InsertCampaignLog,
+  type InsertWhatsappConnection,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, and, ilike, count, sql, sum } from "drizzle-orm";
@@ -162,6 +165,14 @@ export interface IStorage {
   getCampaignLogs(campaignId: string): Promise<CampaignLog[]>;
   createCampaignLog(log: InsertCampaignLog): Promise<CampaignLog>;
   getCampaignLogsByContact(contactId: string): Promise<CampaignLog[]>;
+
+  // WhatsApp Connection operations
+  getWhatsappConnection(userId: string): Promise<WhatsappConnection | undefined>;
+  createWhatsappConnection(connection: InsertWhatsappConnection): Promise<WhatsappConnection>;
+  updateWhatsappConnection(id: string, updates: Partial<WhatsappConnection>): Promise<WhatsappConnection>;
+  deleteWhatsappConnection(id: string): Promise<void>;
+  getWhatsappConnectionBySessionId(sessionId: string): Promise<WhatsappConnection | undefined>;
+  getActiveWhatsappConnection(userId: string): Promise<WhatsappConnection | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -822,6 +833,56 @@ export class DatabaseStorage implements IStorage {
       .from(campaignLogs)
       .where(eq(campaignLogs.contactId, contactId))
       .orderBy(desc(campaignLogs.timestamp));
+  }
+
+  // WhatsApp Connection operations
+  async getWhatsappConnection(userId: string): Promise<WhatsappConnection | undefined> {
+    const [connection] = await db
+      .select()
+      .from(whatsappConnections)
+      .where(eq(whatsappConnections.userId, userId))
+      .orderBy(desc(whatsappConnections.createdAt));
+    return connection;
+  }
+
+  async createWhatsappConnection(connection: InsertWhatsappConnection): Promise<WhatsappConnection> {
+    const [newConnection] = await db.insert(whatsappConnections).values(connection).returning();
+    return newConnection;
+  }
+
+  async updateWhatsappConnection(id: string, updates: Partial<WhatsappConnection>): Promise<WhatsappConnection> {
+    const [updatedConnection] = await db
+      .update(whatsappConnections)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(whatsappConnections.id, id))
+      .returning();
+    return updatedConnection;
+  }
+
+  async deleteWhatsappConnection(id: string): Promise<void> {
+    await db.delete(whatsappConnections).where(eq(whatsappConnections.id, id));
+  }
+
+  async getWhatsappConnectionBySessionId(sessionId: string): Promise<WhatsappConnection | undefined> {
+    const [connection] = await db
+      .select()
+      .from(whatsappConnections)
+      .where(eq(whatsappConnections.sessionId, sessionId));
+    return connection;
+  }
+
+  async getActiveWhatsappConnection(userId: string): Promise<WhatsappConnection | undefined> {
+    const [connection] = await db
+      .select()
+      .from(whatsappConnections)
+      .where(
+        and(
+          eq(whatsappConnections.userId, userId),
+          eq(whatsappConnections.status, "CONNECTED")
+        )
+      )
+      .orderBy(desc(whatsappConnections.lastActivity));
+    return connection;
   }
 }
 
