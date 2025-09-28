@@ -27,8 +27,7 @@ const navigation = [
   { name: "Gerar Leads", href: "/leads", icon: Search },
   { name: "Pipeline", href: "/kanban", icon: Columns },
   { name: "Campanhas", href: "/campaigns", icon: Send },
-  { name: "WhatsApp", href: "/whatsapp/connect", icon: MessageCircle },
-  { name: "Email", href: "/email/configure", icon: Mail },
+  { name: "Integrações", href: "/integrations", icon: Settings },
   { name: "Vendas", href: "/sales", icon: DollarSign },
   { name: "Ranking", href: "/ranking", icon: Trophy },
 ];
