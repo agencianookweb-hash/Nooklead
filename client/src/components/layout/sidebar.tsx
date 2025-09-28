@@ -1,4 +1,5 @@
 import { useAuth } from "@/hooks/useAuth";
+import type { User } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { Link } from "wouter";
@@ -37,6 +38,7 @@ const managerNavigation = [
 
 export default function Sidebar() {
   const { user } = useAuth();
+  const typedUser = user as User | undefined;
   const [location] = useLocation();
 
   const handleLogout = () => {
@@ -48,7 +50,7 @@ export default function Sidebar() {
     return `${firstName?.[0] || ""}${lastName?.[0] || ""}`.toUpperCase();
   };
 
-  const isManager = user?.role === "GESTOR" || user?.role === "ADMIN";
+  const isManager = typedUser?.role === "GESTOR" || typedUser?.role === "ADMIN";
 
   return (
     <div className="fixed inset-y-0 left-0 w-64 bg-white shadow-lg z-40">
@@ -62,19 +64,19 @@ export default function Sidebar() {
         <div className="p-4 border-b border-gray-200">
           <div className="flex items-center space-x-3">
             <Avatar className="w-10 h-10">
-              <AvatarImage src={user?.profileImageUrl} />
+              <AvatarImage src={typedUser?.profileImageUrl || undefined} />
               <AvatarFallback className="bg-blue-600 text-white">
-                {getInitials(user?.firstName, user?.lastName)}
+                {getInitials(typedUser?.firstName || undefined, typedUser?.lastName || undefined)}
               </AvatarFallback>
             </Avatar>
             <div>
               <p className="font-medium text-gray-900">
-                {user?.firstName} {user?.lastName}
+                {typedUser?.firstName} {typedUser?.lastName}
               </p>
               <p className="text-sm text-gray-500">
-                {user?.role === "VENDEDOR" && "Vendedor"}
-                {user?.role === "GESTOR" && "Gestor"}
-                {user?.role === "ADMIN" && "Administrador"}
+                {typedUser?.role === "VENDEDOR" && "Vendedor"}
+                {typedUser?.role === "GESTOR" && "Gestor"}
+                {typedUser?.role === "ADMIN" && "Administrador"}
               </p>
             </div>
           </div>
@@ -84,7 +86,7 @@ export default function Sidebar() {
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-gray-700">Pontos</span>
               <span className="text-lg font-bold text-amber-600">
-                {user?.totalPoints || 0}
+                {typedUser?.totalPoints || 0}
               </span>
             </div>
             <div className="flex items-center justify-between">

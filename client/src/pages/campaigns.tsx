@@ -285,8 +285,8 @@ export default function Campaigns() {
       ) : (
         <div className="grid gap-6">
           {filteredCampaigns.map((campaign) => {
-            const statusInfo = getStatusInfo(campaign.status);
-            const channelInfo = getChannelInfo(campaign.channel);
+            const statusInfo = getStatusInfo(campaign.status || 'DRAFT');
+            const channelInfo = getChannelInfo(campaign.channel || 'WHATSAPP');
             const progress = calculateProgress(campaign);
             const successRate = calculateSuccessRate(campaign);
             const StatusIcon = statusInfo.icon;
@@ -448,7 +448,7 @@ export default function Campaigns() {
               </div>
               <div className="text-center">
                 <div className="text-2xl font-bold text-green-600" data-testid="text-active-campaigns">
-                  {campaigns.filter(c => ['RUNNING', 'SCHEDULED', 'PAUSED'].includes(c.status)).length}
+                  {campaigns.filter(c => c.status && ['RUNNING', 'SCHEDULED', 'PAUSED'].includes(c.status)).length}
                 </div>
                 <div className="text-sm text-muted-foreground">Campanhas Ativas</div>
               </div>
