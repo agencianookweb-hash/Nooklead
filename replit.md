@@ -67,6 +67,14 @@ CRM CNPJ is a comprehensive B2B lead generation and sales management platform th
 - **Team Competition**: Team-based metrics and comparisons
 - **Goal Tracking**: Monthly targets and progress monitoring
 
+### Mass Messaging Module (Módulo de Disparo em Massa)
+- **Multi-channel Support**: WhatsApp Business and Email SMTP campaigns
+- **Contact Management**: Bulk upload system with CSV/XLSX/TXT support
+- **Integrations Hub**: Unified navigation for WhatsApp and Email connections
+- **WhatsApp Integration**: QR code authentication with real-time WebSocket status
+- **Email Configuration**: SMTP setup interface with provider templates (Gmail, Outlook, SendGrid)
+- **Campaign Management**: Visual dashboard with metrics, monitoring, and execution tracking
+
 ## Data Flow
 
 ### Lead Generation Flow
@@ -147,6 +155,7 @@ CRM CNPJ is a comprehensive B2B lead generation and sales management platform th
 
 ```
 Changelog:
+- September 28, 2025. Consolidated WhatsApp and Email menus into unified "Integrações" hub with SMTP configuration interface
 - July 16, 2025. Added business onboarding form for managers with multi-step interface
 - July 04, 2025. Initial setup
 ```
