@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useRoute } from "wouter";
+import { useRoute, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +30,7 @@ import {
   DollarSign,
   Timer,
   HelpCircle,
+  UserPlus,
 } from "lucide-react";
 import {
   LineChart,
@@ -105,6 +106,7 @@ const getStatusIcon = (status: string) => {
 
 export default function CampaignMonitoring() {
   const [, params] = useRoute("/campaigns/monitor/:campaignId");
+  const [, setLocation] = useLocation();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [currentPage, setCurrentPage] = useState(1);
@@ -284,6 +286,10 @@ export default function CampaignMonitoring() {
     // Here would be the reprocess errors logic
   };
 
+  const handleAddContacts = () => {
+    setLocation(`/campaigns/upload/${campaignId}`);
+  };
+
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header */}
@@ -302,12 +308,22 @@ export default function CampaignMonitoring() {
             </span>
           </div>
         </div>
-        {isRefetching && (
-          <div className="flex items-center gap-2 text-muted-foreground">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
-            <span>Atualizando...</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          <Button
+            onClick={handleAddContacts}
+            className="flex items-center gap-2"
+            data-testid="button-add-contacts"
+          >
+            <UserPlus className="h-4 w-4" />
+            Adicionar Contatos
+          </Button>
+          {isRefetching && (
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary"></div>
+              <span>Atualizando...</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Metrics Cards */}

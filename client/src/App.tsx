@@ -16,6 +16,7 @@ import Approvals from "@/pages/approvals";
 import Onboarding from "@/pages/onboarding";
 import CampaignConfiguration from "@/pages/campaign-configuration";
 import CampaignMonitoring from "@/pages/campaign-monitoring";
+import ContactUpload from "@/pages/contact-upload";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
@@ -53,6 +54,7 @@ function Router() {
                 <Route path="/onboarding" component={Onboarding} />
                 <Route path="/campaigns/configure" component={CampaignConfiguration} />
                 <Route path="/campaigns/monitor/:campaignId" component={CampaignMonitoring} />
+                <Route path="/campaigns/upload/:id" component={ContactUpload} />
               </main>
             </div>
           </div>
