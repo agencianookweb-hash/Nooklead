@@ -23,7 +23,7 @@ const navigation = [
   { name: "Dashboard", href: "/", icon: LayoutDashboard },
   { name: "Gerar Leads", href: "/leads", icon: Search },
   { name: "Pipeline", href: "/kanban", icon: Columns },
-  { name: "Campanhas", href: "/campaigns/configure", icon: Send },
+  { name: "Campanhas", href: "/campaigns", icon: Send },
   { name: "Vendas", href: "/sales", icon: DollarSign },
   { name: "Ranking", href: "/ranking", icon: Trophy },
 ];

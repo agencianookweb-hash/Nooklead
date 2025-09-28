@@ -14,6 +14,7 @@ import Ranking from "@/pages/ranking";
 import Team from "@/pages/team";
 import Approvals from "@/pages/approvals";
 import Onboarding from "@/pages/onboarding";
+import Campaigns from "@/pages/campaigns";
 import CampaignConfiguration from "@/pages/campaign-configuration";
 import CampaignMonitoring from "@/pages/campaign-monitoring";
 import ContactUpload from "@/pages/contact-upload";
@@ -52,6 +53,7 @@ function Router() {
                 <Route path="/team" component={Team} />
                 <Route path="/approvals" component={Approvals} />
                 <Route path="/onboarding" component={Onboarding} />
+                <Route path="/campaigns" component={Campaigns} />
                 <Route path="/campaigns/configure" component={CampaignConfiguration} />
                 <Route path="/campaigns/monitor/:campaignId" component={CampaignMonitoring} />
                 <Route path="/campaigns/upload/:id" component={ContactUpload} />
