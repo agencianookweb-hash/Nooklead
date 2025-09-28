@@ -19,6 +19,7 @@ import CampaignConfiguration from "@/pages/campaign-configuration";
 import CampaignMonitoring from "@/pages/campaign-monitoring";
 import ContactUpload from "@/pages/contact-upload";
 import WhatsAppConnect from "@/pages/whatsapp-connect";
+import EmailConfigure from "@/pages/email-configure";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/layout/sidebar";
 import Header from "@/components/layout/header";
@@ -59,6 +60,7 @@ function Router() {
                 <Route path="/campaigns/monitor/:campaignId" component={CampaignMonitoring} />
                 <Route path="/campaigns/upload/:id" component={ContactUpload} />
                 <Route path="/whatsapp/connect" component={WhatsAppConnect} />
+                <Route path="/email/configure" component={EmailConfigure} />
               </main>
             </div>
           </div>

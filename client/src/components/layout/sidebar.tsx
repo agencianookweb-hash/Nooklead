@@ -19,6 +19,7 @@ import {
   Settings,
   Send,
   MessageCircle,
+  Mail,
 } from "lucide-react";
 
 const navigation = [
@@ -27,6 +28,7 @@ const navigation = [
   { name: "Pipeline", href: "/kanban", icon: Columns },
   { name: "Campanhas", href: "/campaigns", icon: Send },
   { name: "WhatsApp", href: "/whatsapp/connect", icon: MessageCircle },
+  { name: "Email", href: "/email/configure", icon: Mail },
   { name: "Vendas", href: "/sales", icon: DollarSign },
   { name: "Ranking", href: "/ranking", icon: Trophy },
 ];

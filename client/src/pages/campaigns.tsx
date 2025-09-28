@@ -343,6 +343,14 @@ export default function Campaigns() {
                           Contatos
                         </Button>
                       </Link>
+                      {campaign.channel === "EMAIL" && (
+                        <Link href="/email/configure">
+                          <Button variant="outline" size="sm" data-testid={`button-email-config-${campaign.id}`}>
+                            <MessageSquare className="h-4 w-4 mr-1" />
+                            Config SMTP
+                          </Button>
+                        </Link>
+                      )}
                       <Link href="/campaigns/configure">
                         <Button variant="outline" size="sm" data-testid={`button-configure-${campaign.id}`}>
                           <Settings className="h-4 w-4 mr-1" />
