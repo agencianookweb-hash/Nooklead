@@ -45,7 +45,7 @@ export class GroqService {
    */
   async chat(
     messages: GroqMessage[],
-    model: string = "llama-3.1-70b-versatile"
+    model: string = "openai/gpt-oss-120b"
   ): Promise<string> {
     if (!this.apiKey) {
       throw new Error("GROQ_API_KEY not set");
