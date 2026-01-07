@@ -6,7 +6,6 @@ import { setupAuth, isAuthenticated } from "./replitAuth";
 import { campaignEngine } from "./campaignEngine";
 import { whatsappService } from "./whatsappService";
 import { groqService } from "./groqService";
-import { groqService } from "./groqService";
 import { insertLeadSchema, insertSaleSchema, insertCompanySchema, insertMassCampaignSchema, insertCampaignContactSchema } from "@shared/schema";
 import { z } from "zod";
 import multer from "multer";
@@ -949,8 +948,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Auth routes
   app.get('/api/auth/user', isAuthenticated, async (req: any, res) => {
     try {
-      const userId = req.user.claims.sub;
+      // Em desenvolvimento, req.user pode ser o objeto direto sem claims
+      const userId = req.user?.claims?.sub || req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ message: "User not authenticated" });
+      }
       const user = await storage.getUser(userId);
+      if (!user) {
+        // Se não encontrou no banco, retorna o usuário da sessão
+        return res.json(req.user);
+      }
       res.json(user);
     } catch (error) {
       console.error("Error fetching user:", error);
