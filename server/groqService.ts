@@ -82,7 +82,7 @@ export class GroqService {
   /**
    * Gera uma resposta simples para uma pergunta
    */
-  async ask(question: string, systemPrompt?: string): Promise<string> {
+  async ask(question: string, systemPrompt?: string, model?: string): Promise<string> {
     const messages: GroqMessage[] = [];
 
     if (systemPrompt) {
@@ -91,7 +91,7 @@ export class GroqService {
 
     messages.push({ role: "user", content: question });
 
-    return await this.chat(messages);
+    return await this.chat(messages, model);
   }
 
   /**
