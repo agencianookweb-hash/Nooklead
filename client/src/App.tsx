@@ -45,7 +45,7 @@ function Router() {
           <div className="min-h-screen bg-gray-50 flex">
             <Sidebar />
             <div className="flex-1 ml-64">
-              <Header title="Dashboard" />
+              <Header />
               <main className="p-6">
                 <Route path="/" component={Dashboard} />
                 <Route path="/manager-dashboard" component={ManagerDashboard} />
