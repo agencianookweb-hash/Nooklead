@@ -23,7 +23,6 @@ import EmailConfigure from "@/pages/email-configure";
 import Integrations from "@/pages/integrations";
 import NotFound from "@/pages/not-found";
 import Sidebar from "@/components/layout/sidebar";
-import Header from "@/components/layout/header";
 
 function Router() {
   const { isAuthenticated, isLoading } = useAuth();
@@ -45,7 +44,6 @@ function Router() {
           <div className="min-h-screen bg-gray-50 flex">
             <Sidebar />
             <div className="flex-1 ml-64">
-              <Header />
               <main className="p-6">
                 <Route path="/" component={Dashboard} />
                 <Route path="/manager-dashboard" component={ManagerDashboard} />
