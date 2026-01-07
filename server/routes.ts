@@ -2275,5 +2275,48 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   console.log('WhatsApp WebSocket server initialized');
 
+  // Groq AI Routes
+  app.post("/api/groq/chat", isAuthenticated, async (req, res) => {
+    try {
+      const { messages, model } = req.body;
+      
+      if (!messages || !Array.isArray(messages)) {
+        return res.status(400).json({ message: "Messages array is required" });
+      }
+
+      const response = await groqService.chat(messages, model);
+      res.json({ response });
+    } catch (error: any) {
+      console.error("Groq chat error:", error);
+      res.status(500).json({ message: error.message || "Failed to get Groq response" });
+    }
+  });
+
+  app.post("/api/groq/ask", isAuthenticated, async (req, res) => {
+    try {
+      const { question, systemPrompt } = req.body;
+      
+      if (!question) {
+        return res.status(400).json({ message: "Question is required" });
+      }
+
+      const response = await groqService.ask(question, systemPrompt);
+      res.json({ response });
+    } catch (error: any) {
+      console.error("Groq ask error:", error);
+      res.status(500).json({ message: error.message || "Failed to get Groq response" });
+    }
+  });
+
+  app.get("/api/groq/models", isAuthenticated, async (req, res) => {
+    try {
+      const models = await groqService.listModels();
+      res.json({ models });
+    } catch (error: any) {
+      console.error("Groq models error:", error);
+      res.status(500).json({ message: error.message || "Failed to list Groq models" });
+    }
+  });
+
   return httpServer;
 }
