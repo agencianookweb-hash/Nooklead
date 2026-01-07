@@ -3,7 +3,6 @@ import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/useAuth";
 import { isUnauthorizedError } from "@/lib/authUtils";
 import { useToast } from "@/hooks/use-toast";
-import Header from "@/components/layout/header";
 import StatsCards from "@/components/dashboard/stats-cards";
 import ActivityFeed from "@/components/dashboard/activity-feed";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -44,7 +43,6 @@ export default function Dashboard() {
   if (isLoading || statsLoading) {
     return (
       <div className="space-y-6">
-        <Header title="Dashboard" />
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {[1, 2, 3, 4].map((i) => (
             <Card key={i} className="animate-pulse">
@@ -62,7 +60,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <Header title="Dashboard" />
       
       {stats && <StatsCards stats={stats} />}
       
