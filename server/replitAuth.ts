@@ -8,7 +8,8 @@ import memoize from "memoizee";
 import connectPg from "connect-pg-simple";
 import { storage } from "./storage";
 
-if (!process.env.REPLIT_DOMAINS) {
+// Permite execução sem Replit em desenvolvimento
+if (!process.env.REPLIT_DOMAINS && process.env.NODE_ENV !== 'development') {
   throw new Error("Environment variable REPLIT_DOMAINS not provided");
 }
 
@@ -24,6 +25,25 @@ const getOidcConfig = memoize(
 
 export function getSession() {
   const sessionTtl = 7 * 24 * 60 * 60 * 1000; // 1 week
+  
+  // Em desenvolvimento sem banco, usa MemoryStore
+  if (!process.env.DATABASE_URL || process.env.NODE_ENV === 'development') {
+    const MemoryStore = require('memorystore')(session);
+    return session({
+      secret: process.env.SESSION_SECRET || 'dev-secret-key-change-in-production',
+      store: new MemoryStore({
+        checkPeriod: 86400000, // prune expired entries every 24h
+      }),
+      resave: false,
+      saveUninitialized: false,
+      cookie: {
+        httpOnly: true,
+        secure: false, // false em desenvolvimento
+        maxAge: sessionTtl,
+      },
+    });
+  }
+  
   const pgStore = connectPg(session);
   const sessionStore = new pgStore({
     conString: process.env.DATABASE_URL,
@@ -71,6 +91,35 @@ export async function setupAuth(app: Express) {
   app.use(getSession());
   app.use(passport.initialize());
   app.use(passport.session());
+
+  // Em desenvolvimento sem Replit, cria autenticação mock
+  if (!process.env.REPLIT_DOMAINS || process.env.NODE_ENV === 'development') {
+    passport.serializeUser((user: Express.User, cb) => cb(null, user));
+    passport.deserializeUser((user: Express.User, cb) => cb(null, user));
+
+    // Login mock - apenas cria um usuário de teste
+    app.get("/api/login", async (req, res) => {
+      const mockUser = {
+        id: "dev-user-123",
+        email: "dev@test.com",
+        firstName: "Dev",
+        lastName: "User",
+        role: "GESTOR",
+      };
+      await storage.upsertUser(mockUser);
+      req.login(mockUser, (err) => {
+        if (err) return res.status(500).json({ message: "Login failed" });
+        res.redirect("/");
+      });
+    });
+
+    app.get("/api/logout", (req, res) => {
+      req.logout(() => {
+        res.redirect("/");
+      });
+    });
+    return;
+  }
 
   const config = await getOidcConfig();
 
@@ -128,6 +177,14 @@ export async function setupAuth(app: Express) {
 }
 
 export const isAuthenticated: RequestHandler = async (req, res, next) => {
+  // Em desenvolvimento, permite acesso sem autenticação completa
+  if (process.env.NODE_ENV === 'development' && !process.env.REPLIT_DOMAINS) {
+    if (!req.isAuthenticated()) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+    return next();
+  }
+
   const user = req.user as any;
 
   if (!req.isAuthenticated() || !user.expires_at) {

@@ -50,6 +50,9 @@ import {
 import { db } from "./db";
 import { eq, desc, and, ilike, count, sql, sum } from "drizzle-orm";
 
+// Helper para verificar se db está disponível
+const hasDb = () => db !== null && db !== undefined;
+
 export interface IStorage {
   // User operations (required for Replit Auth)
   getUser(id: string): Promise<User | undefined>;
@@ -178,11 +181,28 @@ export interface IStorage {
 export class DatabaseStorage implements IStorage {
   // User operations (required for Replit Auth)
   async getUser(id: string): Promise<User | undefined> {
+    if (!hasDb()) return undefined;
     const [user] = await db.select().from(users).where(eq(users.id, id));
     return user;
   }
 
   async upsertUser(userData: UpsertUser): Promise<User> {
+    if (!hasDb()) {
+      // Retorna um mock user quando não há banco
+      return {
+        id: userData.id || "mock-user",
+        email: userData.email || "",
+        firstName: userData.firstName || "",
+        lastName: userData.lastName || "",
+        role: userData.role || "VENDEDOR",
+        isActive: true,
+        totalPoints: 0,
+        monthlyPoints: 0,
+        monthlyGoal: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as User;
+    }
     const [user] = await db
       .insert(users)
       .values(userData)
@@ -205,6 +225,7 @@ export class DatabaseStorage implements IStorage {
     faturamento?: string;
     search?: string;
   }): Promise<Company[]> {
+    if (!hasDb()) return [];
     let query = db.select().from(companies);
     
     const conditions = [];
@@ -233,12 +254,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCompany(company: InsertCompany): Promise<Company> {
+    if (!hasDb()) {
+      return { ...company, id: company.id || "mock-company", createdAt: new Date(), updatedAt: new Date() } as Company;
+    }
     const [newCompany] = await db.insert(companies).values(company).returning();
     return newCompany;
   }
 
   // Lead operations
   async getLeads(userId?: string): Promise<Lead[]> {
+    if (!hasDb()) return [];
     if (userId) {
       return await db.select().from(leads)
         .where(eq(leads.userId, userId))
@@ -249,15 +274,22 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLeadsByStatus(status: string): Promise<Lead[]> {
+    if (!hasDb()) return [];
     return await db.select().from(leads).where(eq(leads.status, status));
   }
 
   async createLead(lead: InsertLead): Promise<Lead> {
+    if (!hasDb()) {
+      return { ...lead, id: lead.id || "mock-lead", createdAt: new Date(), updatedAt: new Date() } as Lead;
+    }
     const [newLead] = await db.insert(leads).values(lead).returning();
     return newLead;
   }
 
   async updateLead(id: string, updates: Partial<Lead>): Promise<Lead> {
+    if (!hasDb()) {
+      return { ...updates, id, createdAt: new Date(), updatedAt: new Date() } as Lead;
+    }
     const [updatedLead] = await db
       .update(leads)
       .set({ ...updates, updatedAt: new Date() })
@@ -267,12 +299,14 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getLeadById(id: string): Promise<Lead | undefined> {
+    if (!hasDb()) return undefined;
     const [lead] = await db.select().from(leads).where(eq(leads.id, id));
     return lead;
   }
 
   // Sales operations
   async getSales(userId?: string): Promise<Sale[]> {
+    if (!hasDb()) return [];
     if (userId) {
       return await db.select().from(sales)
         .where(eq(sales.userId, userId))
@@ -283,6 +317,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getPendingSales(): Promise<Sale[]> {
+    if (!hasDb()) return [];
     return await db
       .select()
       .from(sales)
@@ -291,11 +326,17 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createSale(sale: InsertSale): Promise<Sale> {
+    if (!hasDb()) {
+      return { ...sale, id: sale.id || "mock-sale", createdAt: new Date(), updatedAt: new Date() } as Sale;
+    }
     const [newSale] = await db.insert(sales).values(sale).returning();
     return newSale;
   }
 
   async updateSale(id: string, updates: Partial<Sale>): Promise<Sale> {
+    if (!hasDb()) {
+      return { ...updates, id, createdAt: new Date(), updatedAt: new Date() } as Sale;
+    }
     const [updatedSale] = await db
       .update(sales)
       .set({ ...updates, updatedAt: new Date() })
@@ -306,6 +347,7 @@ export class DatabaseStorage implements IStorage {
 
   // Campaign operations
   async getCampaigns(userId?: string): Promise<Campaign[]> {
+    if (!hasDb()) return [];
     if (userId) {
       return await db.select().from(campaigns)
         .where(eq(campaigns.userId, userId))
@@ -316,12 +358,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createCampaign(campaign: InsertCampaign): Promise<Campaign> {
+    if (!hasDb()) {
+      return { ...campaign, id: campaign.id || "mock-campaign", createdAt: new Date(), updatedAt: new Date() } as Campaign;
+    }
     const [newCampaign] = await db.insert(campaigns).values(campaign).returning();
     return newCampaign;
   }
 
   // Interaction operations
   async getInteractions(leadId: string): Promise<Interaction[]> {
+    if (!hasDb()) return [];
     return await db
       .select()
       .from(interactions)
@@ -330,12 +376,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createInteraction(interaction: InsertInteraction): Promise<Interaction> {
+    if (!hasDb()) {
+      return { ...interaction, id: interaction.id || "mock-interaction", createdAt: new Date(), updatedAt: new Date() } as Interaction;
+    }
     const [newInteraction] = await db.insert(interactions).values(interaction).returning();
     return newInteraction;
   }
 
   // Gamification operations
   async getUserRankings(period = "2024-01"): Promise<any[]> {
+    if (!hasDb()) return [];
     return await db
       .select({
         user: users,
@@ -348,6 +398,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateUserPoints(userId: string, points: number): Promise<void> {
+    if (!hasDb()) return;
     await db
       .update(users)
       .set({
@@ -360,6 +411,14 @@ export class DatabaseStorage implements IStorage {
 
   // Dashboard operations
   async getDashboardStats(userId: string): Promise<any> {
+    if (!hasDb()) {
+      return {
+        leadsGenerated: 0,
+        salesClosed: 0,
+        totalRevenue: 0,
+        conversionRate: 0,
+      };
+    }
     const leadsCount = await db
       .select({ count: count() })
       .from(leads)
@@ -384,6 +443,13 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getTeamStats(managerId: string): Promise<any> {
+    if (!hasDb()) {
+      return {
+        activeMembers: 0,
+        totalRevenue: 0,
+        goalAttainment: 0,
+      };
+    }
     const teamMembers = await db
       .select()
       .from(users)
@@ -416,6 +482,7 @@ export class DatabaseStorage implements IStorage {
 
   // Team management operations
   async getTeamMembers(managerId?: string): Promise<User[]> {
+    if (!hasDb()) return [];
     if (managerId) {
       return await db
         .select()
@@ -441,6 +508,24 @@ export class DatabaseStorage implements IStorage {
     teamId?: string; 
     monthlyGoal: number;
   }): Promise<User> {
+    if (!hasDb()) {
+      return {
+        id: Math.random().toString(36).substr(2, 9),
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName,
+        phone: userData.phone,
+        role: "VENDEDOR",
+        managerId: userData.managerId,
+        teamId: userData.teamId,
+        monthlyGoal: userData.monthlyGoal,
+        isActive: true,
+        totalPoints: 0,
+        monthlyPoints: 0,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as User;
+    }
     // Generate a unique ID for the new user
     const userId = Math.random().toString(36).substr(2, 9);
     
@@ -466,6 +551,9 @@ export class DatabaseStorage implements IStorage {
   }
 
   async updateTeamMember(userId: string, updates: Partial<User>): Promise<User> {
+    if (!hasDb()) {
+      return { ...updates, id: userId, createdAt: new Date(), updatedAt: new Date() } as User;
+    }
     const [user] = await db
       .update(users)
       .set({
@@ -479,6 +567,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deactivateTeamMember(userId: string): Promise<void> {
+    if (!hasDb()) return;
     await db
       .update(users)
       .set({
@@ -509,6 +598,44 @@ export class DatabaseStorage implements IStorage {
     teamSize: number;
     description?: string;
   }): Promise<{ company: Company; user: User }> {
+    if (!hasDb()) {
+      const companyId = Math.random().toString(36).substr(2, 9);
+      const managerId = Math.random().toString(36).substr(2, 9);
+      const nameParts = data.managerName.trim().split(' ');
+      return {
+        company: {
+          id: companyId,
+          cnpj: data.cnpj.replace(/\D/g, ''),
+          razaoSocial: data.companyName,
+          nomeFantasia: data.companyName,
+          setor: data.businessSector,
+          size: data.companySize as "MEI" | "ME" | "EPP" | "GRANDE",
+          cep: data.cep.replace(/\D/g, ''),
+          logradouro: data.address,
+          numero: data.number,
+          complemento: data.complement,
+          bairro: data.neighborhood,
+          cidade: data.city,
+          uf: data.state,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as Company,
+        user: {
+          id: managerId,
+          email: data.managerEmail,
+          firstName: nameParts[0],
+          lastName: nameParts.slice(1).join(' ') || '',
+          phone: data.managerPhone,
+          role: "GESTOR",
+          isActive: true,
+          totalPoints: 0,
+          monthlyPoints: 0,
+          monthlyGoal: data.salesGoal,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as User,
+      };
+    }
     // Generate unique IDs
     const companyId = Math.random().toString(36).substr(2, 9);
     const managerId = Math.random().toString(36).substr(2, 9);
